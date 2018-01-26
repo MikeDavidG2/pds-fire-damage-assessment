@@ -1,0 +1,12 @@
+"The script Process_DA_Fire_Data.py uses this script to control which fields to add.  It will ignore the first two rows, and will ignore everything after Column C.  This CSV can pass the field_name, field_type, and field_length.  All other field parameters are found in the script itself.",,,
+field_name,field_type,field_length,User Notes
+DateOfAssessment,TEXT,50,
+TimeOfAssessment,TEXT,50,
+SiteFullAddress,TEXT,255,
+SiteState,TEXT,2,
+OwnerName,TEXT,255,
+OwnerFullAddress,TEXT,255,
+ParcelAssessedValue,LONG,0,
+DateOfLastSale,DATE,0,
+ImprovementHistory,TEXT,255,
+NumberPicsTaken,SHORT,0,
