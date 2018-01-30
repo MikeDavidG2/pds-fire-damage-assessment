@@ -25,16 +25,13 @@ def main():
     called_by = arcpy.GetParameterAsText(0)
 
     if called_by == 'MANUAL':
-        path_prefix = 'SET_MAPPED_DRIVE_LETTER_HERE:' # i.e. 'P:' or 'U:'
-        path_prefix = 'P:'
+        path_prefix = 'P:'  # i.e. 'P:' or 'U:'
 
     elif called_by == 'SCHEDULED':
-        path_prefix = 'SET_MAPPED_DRIVE_LETTER_HERE' # i.e. 'D:\projects' or 'D:\users'
-        path_prefix = 'D:\projects'
+        path_prefix = 'D:\projects'  # i.e. 'D:\projects' or 'D:\users'
 
     else:  # If script run directly and no called_by parameter specified
-        path_prefix = 'SET_MAPPED_DRIVE_LETTER_HERE:' # i.e. 'P:' or 'U:'
-        path_prefix = 'P:'
+        path_prefix = 'P:'  # i.e. 'P:' or 'U:'
 
     # Name of this script
     name_of_script = 'Process_DA_Fire_Data.py'
@@ -50,13 +47,24 @@ def main():
         print("INI file not found. \nMake sure a valid '.ini' file exists at {}.".format(cfgFile))
         sys.exit()
 
+    # Set the working folder and FGDBs
+    wkg_folder           = config.get('Process_Info', 'wkg_folder')
+    raw_agol_FGDB        = config.get('Process_Info', 'raw_agol_FGDB')
+    raw_agol_FGDB_path   = '{}\{}'.format(wkg_folder, raw_agol_FGDB)
+    processing_FGDB      = config.get('Process_Info', 'Processing_FGDB')
+    processing_FGDB_path = '{}\{}'.format(wkg_folder, processing_FGDB)
+
     # Set the log file folder path
-    log_file_folder = config.get('Folder_Paths', 'Log_File_Folder')
+    log_file_folder = config.get('Process_Info', 'Log_File_Folder')
     log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
 
     # Set the Control_Files path
-    control_file_folder = config.get('Folder_Paths', 'Control_Files')
-    add_fields_csv = '{}\FieldsToAdd.csv'.format(control_file_folder)
+    control_file_folder = config.get('Process_Info', 'Control_Files')
+    add_fields_csv      = '{}\FieldsToAdd.csv'.format(control_file_folder)
+    calc_fields_csv     = '{}\FieldsToCalculate.csv'.format(control_file_folder)
+
+    # Set the PARCELS_ALL Feature Class path
+    parcels_all = config.get('Process_Info', 'Parcels_All')
 
     # Set the Email variables
     ##email_admin_ls = ['michael.grue@sdcounty.ca.gov', 'randy.yakos@sdcounty.ca.gov', 'gary.ross@sdcounty.ca.gov']
@@ -97,15 +105,47 @@ def main():
     #---------------------------------------------------------------------------
     #                 Non-standard Template Functions go HERE
 
+    # QA/QC AGOL data; edit / update the raw data if needed here
+    # TODO: add a function here to:
+    #   Log warning if NULL [IncidentName],
+    #   Log if duplicate [ReportNumber],
+    #   Log if NULL [ReportNumber]
+
     # Get the most recently downloaded data
-    # TODO: add a function here to get the most recently d/l data
+    print '\n--------------------------------------------------------------------'
+    arcpy.env.workspace = raw_agol_FGDB_path
+    AGOL_downloads = arcpy.ListFeatureClasses()  # List all FC's in the FGDB
+    for download in AGOL_downloads:
+        newest_download = download  # Only the last FC in the list is kept after the loop
+
+    newest_download_path = '{}\{}'.format(raw_agol_FGDB_path, newest_download)
+    print 'The newest download is at: {}\n'.format(newest_download_path)
 
     # Spatially Join the downloaded data with the PARCELS_ALL
-    # TODO: add a function here to perform the action and put result into the DA_Fire_Processing.gdb
+    target_features   = newest_download_path
+    join_features     = parcels_all
+    working_fc = '{}\{}_joined'.format(processing_FGDB_path, newest_download)
+
+    print 'Spatially Joining:\n  {}\nWith:\n  {}\nNew FC at:\n  {}\n'.format(target_features, parcels_all, working_fc)
+    arcpy.SpatialJoin_analysis(target_features, join_features, working_fc)
 
     # Add Fields to downloaded DA Fire Data
-    working_fc = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Data\DA_Fire_Processing.gdb\DA_Fire_from_AGOL_2018_01_26__14_28_48'
+##    working_fc = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Data\DA_Fire_Processing.gdb\DA_Fire_from_AGOL_2018_01_26__14_28_48'
     Fields_Add_Fields(working_fc, add_fields_csv)
+
+    # Calculate Fields
+    Fields_Calculate_Fields(working_fc, calc_fields_csv)
+
+    # Backup the production database before attempting to edit it
+
+    # Append newly processed data into the production database
+
+    # Overwrite the FS that the Dashboard is pointing to
+
+    # Update AGOL fields
+    # TODO: add function here to:
+    #   Update (in AGOL) NULL [Quantity] to equal 1,
+    #   Update (in AGOL) NULL [EstimatedReplacementCost] to equal SquareFootageDamaged * x,
 
 
     #---------------------------------------------------------------------------
@@ -134,7 +174,7 @@ def main():
         Please see the log file for more info.<br>
         The Log file is found at: {}""".format(log_file_date)
 
-    Email_W_Body(subj, body, email_admin_ls, cfgFile)
+##    Email_W_Body(subj, body, email_admin_ls, cfgFile)
 
     if success == True:
         print '\nSUCCESSFULLY ran {}'.format(name_of_script)
@@ -373,6 +413,240 @@ def Fields_Add_Fields(wkg_data, add_fields_csv):
         f_counter += 1
 
     print 'Successfully added fields.\n'
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                     FUNCTION: CALCULATE FIELDS
+
+def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
+    """
+    PARAMETERS:
+      wkg_data (str) = Name of the working FC in the wkgGDB. This is the FC
+        that is processed.
+      calc_fields_csv (str) = Full path to the CSV file that lists which fields
+        should be calculated, and how they should be calculated.
+
+    RETURNS:
+      None
+
+    FUNCTION:
+      To calculate fields in the wkg_data using a CSV file located at
+      calc_fields_csv.
+    """
+
+    import csv
+
+    print '--------------------------------------------------------------------'
+    print 'Calculating fields in:\n  %s' % wkg_data
+    print '  Using Control CSV at:\n    {}\n'.format(calc_fields_csv)
+
+    # Make a table view so we can perform selections
+    arcpy.MakeTableView_management(wkg_data, 'wkg_data_view')
+
+    #---------------------------------------------------------------------------
+    #                   Get values from the CSV file:
+    #                FieldsToCalculate.csv (calc_fields_csv)
+    with open (calc_fields_csv) as csv_file:
+        readCSV = csv.reader(csv_file, delimiter = ',')
+
+        where_clauses = []
+        calc_fields = []
+        calcs = []
+
+        row_num = 0
+        for row in readCSV:
+            if row_num > 1:
+                where_clause = row[0]
+                calc_field   = row[2]
+                calc         = row[4]
+
+                where_clauses.append(where_clause)
+                calc_fields.append(calc_field)
+                calcs.append(calc)
+            row_num += 1
+
+    num_calcs = len(where_clauses)
+    print '    There are %s calculations to perform:\n' % str(num_calcs)
+
+    #---------------------------------------------------------------------------
+    #                    Select features and calculate them
+    f_counter = 0
+    while f_counter < num_calcs:
+        #-----------------------------------------------------------------------
+        #               Select features using the where clause
+
+        in_layer_or_view = 'wkg_data_view'
+        selection_type   = 'NEW_SELECTION'
+        my_where_clause  = where_clauses[f_counter]
+
+        print '      Selecting features where: "%s"' % my_where_clause
+
+        # Process
+        arcpy.SelectLayerByAttribute_management(in_layer_or_view, selection_type, my_where_clause)
+
+        #-----------------------------------------------------------------------
+        #     If features selected, perform one of the following calculations
+        # The calculation that needs to be performed depends on the field or the calc
+        #    See the options below:
+
+        countOfSelected = arcpy.GetCount_management(in_layer_or_view)
+        count = int(countOfSelected.getOutput(0))
+        print '        There was/were %s feature(s) selected.' % str(count)
+
+        if count != 0:
+            in_table   = in_layer_or_view
+            field      = calc_fields[f_counter]
+            calc       = calcs[f_counter]
+
+            #-------------------------------------------------------------------
+            # Perform special calculation for SiteFullAddress
+            if (field == 'SiteFullAddress'):
+
+                try:
+                    fields = ['SITUS_ADDRESS', 'SITUS_PRE_DIR', 'SITUS_STREET', 'SITUS_SUFFIX', 'SITUS_POST_DIR', 'SITUS_SUITE', 'SiteFullAddress']
+                    with arcpy.da.UpdateCursor(in_table, fields) as cursor:
+                        for row in cursor:
+                            SITUS_ADDRESS  = row[0]
+                            SITUS_PRE_DIR  = row[1]
+                            SITUS_STREET   = row[2]
+                            SITUS_SUFFIX   = row[3]
+                            SITUS_POST_DIR = row[4]
+                            SITUS_SUITE    = row[5]
+
+                            if SITUS_ADDRESS == None:
+                                SITUS_ADDRESS = 0
+                            if SITUS_PRE_DIR == None:
+                                SITUS_PRE_DIR = ''
+                            if SITUS_STREET == None:
+                                SITUS_STREET = ''
+                            if SITUS_SUFFIX == None:
+                                SITUS_SUFFIX = ''
+                            if SITUS_POST_DIR == None:
+                                SITUS_POST_DIR = ''
+                            if SITUS_SUITE == None:
+                                SITUS_SUITE = ''
+
+                            site_full_address = '{} {} {} {} {} {}'.format(SITUS_ADDRESS, SITUS_PRE_DIR, SITUS_STREET, SITUS_SUFFIX, SITUS_POST_DIR, SITUS_SUITE)
+                            row[6] = site_full_address
+                            cursor.updateRow(row)
+                    del cursor
+
+                    print ('        From the selected features, special calculated field: {}, so that it equals a concatenation of Situs Address Fields\n'.format(field))
+
+                except Exception as e:
+                    print '*** WARNING! Field: %s was not able to be calculated.***\n' % field
+                    print str(e)
+
+            #-------------------------------------------------------------------
+            # Perform special calculation for OwnerName
+            elif (field == 'OwnerName'):
+
+                try:
+                    fields = ['OWN_NAME1', 'OWN_NAME2', 'OWN_NAME3', 'OwnerName']
+                    with arcpy.da.UpdateCursor(in_table, fields) as cursor:
+                        for row in cursor:
+
+                            OWN_NAME1 = row[0]
+                            OWN_NAME2 = row[1]
+                            OWN_NAME3 = row[2]
+
+                            if OWN_NAME1 == None:
+                                OWN_NAME1 = ''
+                            if OWN_NAME2 == None:
+                                OWN_NAME2 = ''
+                            if OWN_NAME3 == None:
+                                OWN_NAME3 = ''
+
+                            owner_name = '{}    {}    {}'.format(OWN_NAME1, OWN_NAME2, OWN_NAME3)
+                            row[3] = owner_name
+                            cursor.updateRow(row)
+                    del cursor
+
+                    print ('        From the selected features, special calculated field: {}, so that it equals a concatenation of Owner Name Fields\n'.format(field))
+
+                except Exception as e:
+                    print '*** WARNING! Field: %s was not able to be calculated.***\n' % field
+                    print str(e)
+
+            #-------------------------------------------------------------------
+            # Perform special calculation for OwnerFullAddress
+            elif (field == 'OwnerFullAddress'):
+
+                try:
+                    fields = ['OWN_ADDR1', 'OWN_ADDR2', 'OWN_ADDR3', 'OWN_ADDR4', 'OwnerFullAddress']
+                    with arcpy.da.UpdateCursor(in_table, fields) as cursor:
+                        for row in cursor:
+
+                            OWN_ADDR1 = row[0]
+                            OWN_ADDR2 = row[1]
+                            OWN_ADDR3 = row[2]
+                            OWN_ADDR4 = row[3]
+
+                            if OWN_ADDR1 == None:
+                                OWN_ADDR1 = ''
+                            if OWN_ADDR2 == None:
+                                OWN_ADDR2 = ''
+                            if OWN_ADDR3 == None:
+                                OWN_ADDR3 = ''
+                            if OWN_ADDR4 == None:
+                                OWN_ADDR4 = ''
+
+                            owner_address = '{}   {}   {}   {}'.format(OWN_ADDR1, OWN_ADDR2, OWN_ADDR3, OWN_ADDR4)
+                            row[4] = owner_address
+                            cursor.updateRow(row)
+                    del cursor
+
+                    print ('        From the selected features, special calculated field: {}, so that it equals a concatenation of Owner Address Fields\n'.format(field))
+
+                except Exception as e:
+                    print '*** WARNING! Field: %s was not able to be calculated.***\n' % field
+                    print str(e)
+
+            #-------------------------------------------------------------------
+            # Test if the user wants to calculate the field being equal to
+            # ANOTHER FIELD by seeing if the calculation starts or ends with an '!'
+            elif (calc.startswith('!') or calc.endswith('!')):
+                f_expression = calc
+
+                try:
+                    # Process
+                    arcpy.CalculateField_management(in_table, field, f_expression, expression_type="PYTHON_9.3")
+
+                    print ('        From selected features, calculated field: %s, so that it equals FIELD: %s\n'
+                            % (field, f_expression))
+
+                except Exception as e:
+                    print '*** WARNING! Field: %s was not able to be calculated.***\n' % field
+                    print str(e)
+
+            #-------------------------------------------------------------------
+            # If calc does not start or end with a '!', it is probably because the
+            # user wanted to calculate the field being equal to a STRING
+            else:
+                s_expression = "'%s'" % calc
+
+                try:
+                    # Process
+                    arcpy.CalculateField_management(in_table, field, s_expression, expression_type="PYTHON_9.3")
+
+                    print ('        From selected features, calculated field: %s, so that it equals STRING: %s\n'
+                            % (field, s_expression))
+
+                except Exception as e:
+                    print '*** WARNING! Field: %s was not able to be calculated.***\n' % field
+                    print str(e)
+
+        else:
+            print ('        WARNING.  No records were selected.  Did not perform calculation.\n')
+
+        #-----------------------------------------------------------------------
+
+        # Clear selection before looping back through to the next selection
+        arcpy.SelectLayerByAttribute_management(in_layer_or_view, 'CLEAR_SELECTION')
+
+        f_counter += 1
+
+    print 'Successfully calculated fields.\n'
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
