@@ -211,10 +211,10 @@ def main():
     Email_W_Body(subj, body, email_admin_ls, cfgFile)
 
     if success == True:
-        print 'SUCCESSFULLY ran Download_AGOL_Homeless_Activity.py'
+        print '\nSUCCESSFULLY ran {}'.format(name_of_script)
         print 'Please find downloaded data at:\n  {}\n'.format(wkg_folder)
     else:
-        print '*** ERROR with Download_AGOL_Homeless_Activity.py ***'
+        print '\n*** ERROR with {} ***'.format(name_of_script)
         print 'Please see log file (noted above) for troubleshooting\n'
 
     if called_by == 'MANUAL':

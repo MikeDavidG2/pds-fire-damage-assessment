@@ -53,6 +53,7 @@ def main():
     raw_agol_FGDB_path   = '{}\{}'.format(wkg_folder, raw_agol_FGDB)
     processing_FGDB      = config.get('Process_Info', 'Processing_FGDB')
     processing_FGDB_path = '{}\{}'.format(wkg_folder, processing_FGDB)
+    prod_FC_path   = config.get('Process_Info', 'Prod_FC')
 
     # Set the log file folder path
     log_file_folder = config.get('Process_Info', 'Log_File_Folder')
@@ -65,6 +66,10 @@ def main():
 
     # Set the PARCELS_ALL Feature Class path
     parcels_all = config.get('Process_Info', 'Parcels_All')
+
+    # Set the Survey123 Feature Service variables
+    name_of_FS = config.get('Download_Info', 'FS_names')
+    index_of_layer_in_FS = config.get('Download_Info', 'FS_indexes')
 
     # Set the Email variables
     ##email_admin_ls = ['michael.grue@sdcounty.ca.gov', 'randy.yakos@sdcounty.ca.gov', 'gary.ross@sdcounty.ca.gov']
@@ -114,6 +119,7 @@ def main():
     # Get the most recently downloaded data
     print '\n--------------------------------------------------------------------'
     arcpy.env.workspace = raw_agol_FGDB_path
+    print 'Listing FCs in: {}'.format(raw_agol_FGDB_path)
     AGOL_downloads = arcpy.ListFeatureClasses()  # List all FC's in the FGDB
     for download in AGOL_downloads:
         newest_download = download  # Only the last FC in the list is kept after the loop
@@ -121,6 +127,7 @@ def main():
     newest_download_path = '{}\{}'.format(raw_agol_FGDB_path, newest_download)
     print 'The newest download is at: {}\n'.format(newest_download_path)
 
+    #---------------------------------------------------------------------------
     # Spatially Join the downloaded data with the PARCELS_ALL
     target_features   = newest_download_path
     join_features     = parcels_all
@@ -129,24 +136,69 @@ def main():
     print 'Spatially Joining:\n  {}\nWith:\n  {}\nNew FC at:\n  {}\n'.format(target_features, parcels_all, working_fc)
     arcpy.SpatialJoin_analysis(target_features, join_features, working_fc)
 
+    #---------------------------------------------------------------------------
     # Add Fields to downloaded DA Fire Data
-##    working_fc = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Data\DA_Fire_Processing.gdb\DA_Fire_from_AGOL_2018_01_26__14_28_48'
+    ##working_fc = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Data\DA_Fire_Processing.gdb\DA_Fire_from_AGOL_2018_01_26__14_28_48'
     Fields_Add_Fields(working_fc, add_fields_csv)
 
+    #---------------------------------------------------------------------------
     # Calculate Fields
     Fields_Calculate_Fields(working_fc, calc_fields_csv)
 
+    #---------------------------------------------------------------------------
     # Backup the production database before attempting to edit it
+    Backup_FC(prod_FC_path)
 
-    # Append newly processed data into the production database
+    #---------------------------------------------------------------------------
+    #         Append newly processed data into the production database
+    # Delete the features in the prod database
+    Delete_Features(prod_FC_path)
 
-    # Overwrite the FS that the Dashboard is pointing to
+    # Append the features from the working database to the prod database
+    Append_Data(working_fc, prod_FC_path)
 
-    # Update AGOL fields
-    # TODO: add function here to:
-    #   Update (in AGOL) NULL [Quantity] to equal 1,
-    #   Update (in AGOL) NULL [EstimatedReplacementCost] to equal SquareFootageDamaged * x,
+    #---------------------------------------------------------------------------
+    #                           Update AGOL fields
+    #---------------------------------------------------------------------------
+    #
+    #               Update (in AGOL) NULL [Quantity] to equal 1
+    print '\nUpdating (in AGOL) any records with a NULL [Quantity] to equal 1'
 
+    # Get list of Object IDs
+    where_clause = "Quantity IS NULL"
+    obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
+
+    # Update those Object IDs to have 1 in their [Quantity] field
+    field_to_update = 'Quantity'
+    new_value       = 1
+    for object_id in obj_ids:
+
+        AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
+
+
+    #           Update (in AGOL) NULL [EstimatedReplacementCost]
+    #                to equal (in working database) [EstimatedReplacementCost]
+    # Make a cursor that only looks at reports with an Estimated Replacement Cost
+    print '\nUpdating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
+    fields = ['EstimatedReplacementCost', 'ReportNumber']
+    cur_where_clause = "EstimatedReplacementCost IS NOT NULL"
+    print '  Cursor Where Clause: "{}"'.format(cur_where_clause)
+    with arcpy.da.SearchCursor(working_fc, fields, cur_where_clause) as cursor:
+        for row in cursor:
+            est_replcmt_cost = row[0]
+            report_number    = row[1]
+
+            # Get the object id of the AGOL feature with that report number
+            where_clause = "ReportNumber = {}".format(report_number)
+            obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
+
+            # Update the AGOL feature with that report number with the Estimated Replacement Cost
+            if (len(obj_ids) == 1):  # There should only be one object id with that report number
+                field_to_update = 'EstimatedReplacementCost'
+                new_value = est_replcmt_cost
+
+                for object_id in obj_ids:
+                    AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
 
     #---------------------------------------------------------------------------
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -360,7 +412,8 @@ def Fields_Add_Fields(wkg_data, add_fields_csv):
     import csv
 
     print '--------------------------------------------------------------------'
-    print 'Adding fields to:\n  %s' % wkg_data
+    print 'Starting Fields_Add_Fields()'
+    print ' Adding fields to:\n  %s' % wkg_data
     print '  Using Control CSV at:\n    {}\n'.format(add_fields_csv)
     with open (add_fields_csv) as csv_file:
         readCSV = csv.reader(csv_file, delimiter = ',')
@@ -412,7 +465,7 @@ def Fields_Add_Fields(wkg_data, add_fields_csv):
             print str(e)
         f_counter += 1
 
-    print 'Successfully added fields.\n'
+    print 'Finished Fields_Add_Fields().\n'
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -437,7 +490,8 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
     import csv
 
     print '--------------------------------------------------------------------'
-    print 'Calculating fields in:\n  %s' % wkg_data
+    print 'Starting Fields_Calculate_Fields()'
+    print ' Calculating fields in:\n  %s' % wkg_data
     print '  Using Control CSV at:\n    {}\n'.format(calc_fields_csv)
 
     # Make a table view so we can perform selections
@@ -534,8 +588,9 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
                     print ('        From the selected features, special calculated field: {}, so that it equals a concatenation of Situs Address Fields\n'.format(field))
 
                 except Exception as e:
-                    print '*** WARNING! Field: %s was not able to be calculated.***\n' % field
+                    print '*** WARNING! Field: %s was not able to be calculated.***' % field
                     print str(e)
+                    print '\n'
 
             #-------------------------------------------------------------------
             # Perform special calculation for OwnerName
@@ -565,8 +620,9 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
                     print ('        From the selected features, special calculated field: {}, so that it equals a concatenation of Owner Name Fields\n'.format(field))
 
                 except Exception as e:
-                    print '*** WARNING! Field: %s was not able to be calculated.***\n' % field
+                    print '*** WARNING! Field: %s was not able to be calculated.***' % field
                     print str(e)
+                    print '\n'
 
             #-------------------------------------------------------------------
             # Perform special calculation for OwnerFullAddress
@@ -599,8 +655,9 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
                     print ('        From the selected features, special calculated field: {}, so that it equals a concatenation of Owner Address Fields\n'.format(field))
 
                 except Exception as e:
-                    print '*** WARNING! Field: %s was not able to be calculated.***\n' % field
+                    print '*** WARNING! Field: %s was not able to be calculated.***' % field
                     print str(e)
+                    print '\n'
 
             #-------------------------------------------------------------------
             # Test if the user wants to calculate the field being equal to
@@ -646,7 +703,244 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
 
         f_counter += 1
 
-    print 'Successfully calculated fields.\n'
+    print 'Finished Fields_Calculate_Fields().\n'
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                         Function Backup Feature Class
+def Backup_FC(full_path_to_fc):
+    """
+    PARAMETERS:
+      full_path_to_fc (str): Full path to the FC you want to create a copy of.
+
+    RETURNS:
+      None
+
+    FUNCTION:
+      To create a copy of a FC.  Primarily as a Backup.  Appends '_BAK' to the
+      end of the copied FC.  The FC is copied to the same workspace as the
+      original FC.  The original FC remains unchanged.
+    """
+
+    arcpy.env.overwriteOutput = True
+    import os
+
+    print '--------------------------------------------------------------------'
+    print 'Starting Backup_FC()'
+
+
+    in_features = full_path_to_fc
+    out_path    = os.path.dirname(full_path_to_fc)
+    out_name    = '{}_BAK'.format(os.path.basename(full_path_to_fc))
+
+    print '  Backing up FC: {}'.format(in_features)
+    print '             To: {}'.format(out_path)
+    print '             As: {}'.format(out_name)
+
+    arcpy.FeatureClassToFeatureClass_conversion (in_features, out_path, out_name)
+
+    print 'Finished Backup_FC()\n'
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                          FUNCTION Delete_Features()
+def Delete_Features(in_fc):
+    """
+    PARAMETERS:
+      in_fc (str): Full path to a Feature Class.
+
+    RETURNS:
+      None
+
+    FUNCTION:
+      To delete the features from one FC.
+    """
+
+    print '--------------------------------------------------------------------'
+    print 'Starting Delete_Features()...'
+
+    print '  Deleting Features from: "{}"'.format(in_fc)
+
+    arcpy.DeleteFeatures_management(in_fc)
+
+    print 'Finished Delete_Features()\n'
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                        FUNCTION:  APPEND DATA
+
+def Append_Data(input_item, target, schema_type='NO_TEST', field_mapping=None):
+    """
+    PARAMETERS:
+      input_item (str) = Full path to the item to append.
+      target (str) = Full path to the item that will be updated.
+      schema_type (str) = Controls if a schema test will take place.
+        TEST - Schemas between two items must match.
+        NO_TEST - Schemas don't have to match.
+                  This is the default for this function.
+      field_mapping {arcpy.FieldMappings obj} = Arcpy Field Mapping object.
+        Optional.
+
+    RETURNS:
+      None
+
+    FUNCTION:
+      To append the data from the input_item to the target using an
+      optional arcpy field_mapping object to override the default field mapping.
+    """
+
+    print '--------------------------------------------------------------------'
+    print 'Starting Append_Data()...'
+    print '  From: {}'.format(input_item)
+    print '  To:   {}'.format(target)
+
+    # If there is a field mapping object, make sure there is no schema test
+    if field_mapping <> None:
+        schema_type = 'NO_TEST'
+
+    # Process
+    arcpy.Append_management(input_item, target, schema_type, field_mapping)
+
+    print 'Finished Append_Data()\n'
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                FUNCTION:    Get AGOL Object IDs Where
+
+def AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token):
+    """
+    PARAMETERS:
+      name_of_FS (str): The name of the Feature Service (do not include things
+        like "services1.arcgis.com/1vIhDJwtG5eNmiqX/ArcGIS/rest/services", just
+        the name is needed.  i.e. "DPW_WP_SITES_DEV_VIEW".
+      index_of_layer_in_FS (int): The index of the layer in the Feature Service.
+        This will frequently be 0, but it could be a higer number if the FS has
+        multiple layers in it.
+      where_clause (str): Where clause. i.e.:
+        where_clause = "FIELD_NAME = 'Value in field'"
+      token (str): Obtained from the Get_Token()
+
+    RETURNS:
+      object_ids (list of str): List of OBJECTID's that satisfied the
+      where_clause.
+
+    FUNCTION:
+      To get a list of the OBJECTID's of the features that satisfied the
+      where clause.  This list will be the full list of all the records in the
+      FS regardless of the number of the returned OBJECTID's or the max record
+      count for the FS.
+
+    NOTE: This function assumes that you have already gotten a token from the
+    Get_Token() and are passing it to this function via the 'token' variable.
+    """
+
+    print '--------------------------------------------------------------------'
+    print "Starting Get_AGOL_Object_Ids_Where()"
+    import urllib2, urllib, json
+
+    #TODO: have a success variable to return
+
+    # Create empty list to hold the OBJECTID's that satisfy the where clause
+    object_ids = []
+
+    # Encode the where_clause so it is readable by URL protocol (ie %27 = ' in URL).
+    # visit http://meyerweb.com/eric/tools/dencoder to test URL encoding.
+    where_encoded = urllib.quote(where_clause)
+
+    # Set URLs
+    query_url = r'https://services1.arcgis.com/1vIhDJwtG5eNmiqX/ArcGIS/rest/services/{}/FeatureServer/{}/query'.format(name_of_FS, index_of_layer_in_FS)
+    query = '?where={}&returnIdsOnly=true&f=json&token={}'.format(where_encoded, token)
+    get_object_id_url = query_url + query
+
+    # Get the list of OBJECTID's that satisfied the where_clause
+
+    print '  Getting list of OBJECTID\'s that satisfied the where clause for layer:\n    {}'.format(query_url)
+    print '  Where clause: "{}"'.format(where_clause)
+    response = urllib2.urlopen(get_object_id_url)
+    response_json_obj = json.load(response)
+    try:
+        object_ids = response_json_obj['objectIds']
+    except KeyError:
+        print '***ERROR!  KeyError! ***'
+        print '  {}\n'.format(response_json_obj['error']['message'])
+        print '  If you receive "Invalid URL", are you sure you have the correct FS name?'
+
+    if len(object_ids) > 0:
+        print '  There are "{}" features that satisfied the query.'.format(len(object_ids))
+        print '  OBJECTID\'s of those features:'
+        for obj in object_ids:
+            print '    {}'.format(obj)
+
+    else:
+        print '  No features satisfied the query.'
+
+    print "Finished Get_AGOL_Object_Ids_Where()\n"
+
+    return object_ids
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                FUNCTION:    Update AGOL Features
+
+def AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token):
+    """
+    PARAMETERS:
+      name_of_FS (str): The name of the Feature Service (do not include things
+        like "services1.arcgis.com/1vIhDJwtG5eNmiqX/ArcGIS/rest/services", just
+        the name is needed.  i.e. "DPW_WP_SITES_DEV_VIEW".
+      index_of_layer_in_FS (int): The index of the layer in the Feature Service.
+        This will frequently be 0, but it could be a higer number if the FS has
+        multiple layers in it.
+      object_id (str or int): OBJECTID that should be updated.
+      field_to_update (str): Field in the FS that should be updated.
+      new_value (str or int): New value that should go into the field.  Data
+        type depends on the data type of the field.
+      token (str): Token from AGOL that gives permission to interact with
+        data stored on AGOL servers.  Obtained from the Get_Token().
+
+    RETURNS:
+      success (boolean): 'True' if there were no errors.  'False' if there were.
+
+    FUNCTION:
+      To Update features on an AGOL Feature Service.
+    """
+
+    print '--------------------------------------------------------------------'
+    print "Starting AGOL_Update_Features()"
+    import urllib2, urllib, json
+
+    success = True
+
+    # Set the json upate
+    features_json = {"attributes" : {"objectid" : object_id, "{}".format(field_to_update) : "{}".format(new_value)}}
+    ##print 'features_json:  {}'.format(features_json)
+
+    # Set URLs
+    update_url       = r'https://services1.arcgis.com/1vIhDJwtG5eNmiqX/ArcGIS/rest/services/{}/FeatureServer/{}/updateFeatures?token={}'.format(name_of_FS, index_of_layer_in_FS, token)
+    update_params    = urllib.urlencode({'Features': features_json, 'f':'json'})
+
+
+    # Update the features
+    print '  Updating Features in FS: {}'.format(name_of_FS)
+    print '                 At index: {}'.format(index_of_layer_in_FS)
+    print '   OBJECTID to be updated: {}'.format(object_id)
+    print '      Field to be updated: {}'.format(field_to_update)
+    print '   New value for updt fld: {}'.format(new_value)
+
+    ##print update_url + update_params
+    response  = urllib2.urlopen(update_url, update_params)
+    response_json_obj = json.load(response)
+    ##print response_json_obj
+
+    for result in response_json_obj['updateResults']:
+        ##print result
+        print '    OBJECTID: {}'.format(result['objectId'])
+        print '      Updated? {}'.format(result['success'])
+        if result['success'] != True:
+            success = False
+
+    print 'Finished AGOL_Update_Features()\n'
+    return success
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
