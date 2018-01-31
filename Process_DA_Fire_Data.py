@@ -11,6 +11,11 @@ To Process the recently downloaded Fire Damage Assessment Data.
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 
+#TODO: comment Purpose above
+#TODO: add try/except and error handling to this script
+#TODO: test this script on the County network
+#TODO: test this script on appending to SDE FC instead of a FGDB
+
 import arcpy, sys, datetime, os, ConfigParser
 arcpy.env.overwriteOutput = True
 
@@ -48,6 +53,7 @@ def main():
         sys.exit()
 
     # Set the working folder and FGDBs
+    # TODO: some of these 'Process_Info' can be changed to 'Download Info'
     wkg_folder           = config.get('Process_Info', 'wkg_folder')
     raw_agol_FGDB        = config.get('Process_Info', 'raw_agol_FGDB')
     raw_agol_FGDB_path   = '{}\{}'.format(wkg_folder, raw_agol_FGDB)
@@ -89,13 +95,13 @@ def main():
     # Turn all 'print' statements into a log-writing object
     if success == True:
         try:
-            orig_stdout, log_file_date = Write_Print_To_Log(log_file, name_of_script)
+            orig_stdout, log_file_date, dt_to_append = Write_Print_To_Log(log_file, name_of_script)
         except Exception as e:
             success = False
             print '*** ERROR with Write_Print_To_Log() ***'
             print str(e)
 
-    # Get a token with permissions to view the data
+    # Get a token with permissions to view the AGOL data
     if success == True:
         try:
             token = Get_Token(cfgFile)
@@ -132,30 +138,41 @@ def main():
     target_features   = newest_download_path
     join_features     = parcels_all
     working_fc = '{}\{}_joined'.format(processing_FGDB_path, newest_download)
+    join_operation =  'JOIN_ONE_TO_MANY'
 
     print 'Spatially Joining:\n  {}\nWith:\n  {}\nNew FC at:\n  {}\n'.format(target_features, parcels_all, working_fc)
-    arcpy.SpatialJoin_analysis(target_features, join_features, working_fc)
+##    arcpy.SpatialJoin_analysis(target_features, join_features, working_fc, join_operation)
 
     #---------------------------------------------------------------------------
     # Add Fields to downloaded DA Fire Data
     ##working_fc = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Data\DA_Fire_Processing.gdb\DA_Fire_from_AGOL_2018_01_26__14_28_48'
-    Fields_Add_Fields(working_fc, add_fields_csv)
+##    Fields_Add_Fields(working_fc, add_fields_csv)
 
     #---------------------------------------------------------------------------
     # Calculate Fields
-    Fields_Calculate_Fields(working_fc, calc_fields_csv)
+##    Fields_Calculate_Fields(working_fc, calc_fields_csv)
+
+    #---------------------------------------------------------------------------
+    # Handle data on a stacked parcel
+    # TODO: write function here
+
+    #---------------------------------------------------------------------------
+    # QA/QC the data
+    working_fc = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Data\DA_Fire_Processing.gdb\DA_Fire_from_AGOL_2018_01_31__08_47_28_joined'
+    QA_QC_log_file   = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Logs\QA_QC_Logs\DA_Fire_QA_QC'
+    QA_QC_Data(newest_download_path, working_fc, QA_QC_log_file, dt_to_append)
 
     #---------------------------------------------------------------------------
     # Backup the production database before attempting to edit it
-    Backup_FC(prod_FC_path)
+##    Backup_FC(prod_FC_path)
 
     #---------------------------------------------------------------------------
     #         Append newly processed data into the production database
     # Delete the features in the prod database
-    Delete_Features(prod_FC_path)
+##    Delete_Features(prod_FC_path)
 
     # Append the features from the working database to the prod database
-    Append_Data(working_fc, prod_FC_path)
+##    Append_Data(working_fc, prod_FC_path)
 
     #---------------------------------------------------------------------------
     #                           Update AGOL fields
@@ -258,6 +275,8 @@ def Write_Print_To_Log(log_file, name_of_script):
     RETURNS:
       orig_stdout (os object): The original stdout is saved in this variable so
         that the script can access it and return stdout back to its orig settings.
+      log_file_date (str): Full path to the log file with the date appended to it.
+      dt_to_append (str): Date and time in string format 'YYYY_MM_DD__HH_MM_SS'
 
     FUNCTION:
       To turn all the 'print' statements into a log-writing object.  A new log
@@ -295,7 +314,7 @@ def Write_Print_To_Log(log_file, name_of_script):
     print '             START {}'.format(name_of_script)
     print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n'
 
-    return orig_stdout, log_file_date
+    return orig_stdout, log_file_date, dt_to_append
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -704,6 +723,235 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
         f_counter += 1
 
     print 'Finished Fields_Calculate_Fields().\n'
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                          Function QA/QC Data
+def QA_QC_Data(orig_fc, working_fc, QA_QC_log_file, dt_to_append):
+    """
+    PARAMETERS:
+
+    RETURNS:
+
+    FUNCTION:
+    """
+
+    print '--------------------------------------------------------------------'
+    print 'Starting QA_QC_Data()'
+    print '  QA/QC Data at: {}'.format(working_fc)
+
+    #---------------------------------------------------------------------------
+    #                 Set up a new QA/QC log file to write to
+    # Get the original logfile so it can be returned to normal at the
+    # end of the function.
+    orig_logfile = sys.stdout
+
+    # Create the log file with the datetime appended to the file name
+    log_file_date = '{}_{}.log'.format(QA_QC_log_file,dt_to_append)
+    write_to_log = open(log_file_date, 'w')
+
+    # Make the 'print' statement write to the QA/QC log file
+    print 'Find log file found at:\n  {}'.format(log_file_date)
+    sys.stdout = write_to_log
+
+    #===========================================================================
+    # Every print statement between the equal (=) symbols will print to a QA/Q log file.
+
+    # Make a header for the new QA/QC log file
+    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+    print 'This is the log file for any QA/QC checks that were performed by the'
+    print 'Process_DA_Fire_Data.py script on the downloaded AGOL'
+    print 'Fire Damage Assessment data'
+    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+
+    #---------------------------------------------------------------------------
+    #      1) Check to see if there are any duplicates in [ReportNumber]
+    print '\n------------------------------------------------------------------'
+    print '1) Checking for features with duplicate Report Numbers...'
+    print '  At: {}\n'.format(orig_fc)
+    orig_list = []
+    dup_list  = []
+
+    # Use data from AGOL (orig_fc) before it is potentially split into
+    # multiple records by the Spatial Join proecss, which would result in false
+    # positive results when searching for duplicate Report Numbers
+    with arcpy.da.SearchCursor(orig_fc, ['ReportNumber']) as cursor:
+        for row in cursor:
+            report_number = row[0]
+
+            # Sort each report number into one of two lists
+            if report_number in orig_list:
+                dup_list.append(report_number)
+            else:
+                orig_list.append(report_number)
+
+        del cursor
+
+    if (len(dup_list) > 0):
+        print '  WARNING! There were duplicate Report Numbers:'
+        for dup in dup_list:
+            print '    {}'.format(dup)
+        print '\n  LUEG-GIS, please log onto the AGOL database and find out why there are'
+        print '  duplicate Report Numbers.  Survey123 should create a unique'
+        print '  Report Number as long as staff don\'t start their surveys at'
+        print '  the same 1/100th of a second.'
+
+    else:
+        print '  OK! There were no duplicate Report Numbers'
+
+    #---------------------------------------------------------------------------
+    #      2) Check to see if any features have NULL in the field [ReportNumber]
+    print '\n------------------------------------------------------------------'
+    print '2) Checking for features with no Report Number...'
+
+    # Select features that do not have a Report Number
+    where_clause = "ReportNumber IS NULL or ReportNumber = '' "
+    print '  At: {}\n  Where: {}\n'.format(working_fc, where_clause)
+    lyr = Select_Object(working_fc, 'NEW_SELECTION', where_clause)
+
+    # Get count of the number of features selected
+    num_selected = Get_Count_Selected(lyr)
+
+    # Report findings
+    if num_selected > 0:
+        print '  WARNING! There were {} features without a Report Number at the time the data was downloaded'.format(num_selected)
+        print '\n  LUEG-GIS, please log onto AGOL and find out why there is no Report Number for these features'
+        print '  Survey123 should auto generate report numbers, so if there is a record w/o a Report Number'
+        print '  it is possible that the record was created by the AGOL Web Map.  If so, this is against normal workflow'
+        print '  and must be investigated'
+    else:
+        print '  OK! There were no features without a Report Number'
+
+    #---------------------------------------------------------------------------
+    #      3) Check to see if any features have NULL in [IncidentName]
+    print '\n------------------------------------------------------------------'
+    print '3) Checking for features with no Incident Name...'
+
+    # Select features that do not have an Incident Name
+    where_clause = "IncidentName IS NULL or IncidentName = '' "
+    print '  At: {}\n  Where: {}\n'.format(working_fc, where_clause)
+    lyr = Select_Object(working_fc, 'NEW_SELECTION', where_clause)
+
+    # Get count of the number of features selected
+    num_selected = Get_Count_Selected(lyr)
+
+    # Report findings
+    if num_selected > 0:
+        print '  WARNING! There were "{}" features without an Incident Name at the time the data was downloaded.'.format(num_selected)
+        print '  It is expected that LUEG-GIS staff will fill out the Incident Name as needed'
+        print '\n  LUEG-GIS, please log onto AGOL and fill out an Incident Name for these features'
+    else:
+        print '  OK! There were no features without an Incident Name'
+
+    #---------------------------------------------------------------------------
+    #      4) Check to see if any features have NULL in [APN]
+    print '\n------------------------------------------------------------------'
+    print '4) Checking for features with no APN...'
+
+    # Select features that do not have a Report Number
+    where_clause = "APN IS NULL or APN = '' "
+    print '  At: {}\n  Where: {}\n'.format(working_fc, where_clause)
+    no_apns = []
+    with arcpy.da.SearchCursor(working_fc, ['ReportNumber', 'APN'], where_clause) as cursor:
+        for row in cursor:
+            no_apns.append(row[0])
+
+    # Report findings
+    if (len(no_apns) > 0):
+        print '  WARNING! There were {} features without an APN at the time the data was downloaded'.format(len(no_apns))
+        print '  Report Number:'
+        for no_apn in no_apns:
+            print '    {}'.format(no_apn)
+        print '\n  This usually happens if the feature\'s location is not on a parcel.'
+        print '  Any Damage Assessment Staff, please log onto AGOL Web Map'
+        print '  and move the features with the above Report Numbers to the correct parcel.'
+    else:
+        print '  OK! There were no features without a Report Number'
+
+    #---------------------------------------------------------------------------
+    #     5) Check to see if [SITUS_ADDRESS] is in [StreetNumber_Usr]
+    # TODO: See if this makes sense to write up...
+
+
+    #---------------------------------------------------------------------------
+    # Return the print statement to write to our general log file
+    sys.stdout = orig_logfile
+    #===========================================================================
+    print 'Finished QA_QC_Data()\n'
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                       FUNCTION Select_Object()
+def Select_Object(path_to_obj, selection_type, where_clause):
+    """
+    PARAMETERS:
+      path_to_obj (str): Full path to the object (Feature Class or Table) that
+        is to be selected.
+
+      selection_type (str): Selection type.  Valid values are:
+        NEW_SELECTION
+        ADD_TO_SELECTION
+        REMOVE_FROM_SELECTION
+        SUBSET_SELECTION
+        SWITCH_SELECTION
+        CLEAR_SELECTION
+
+      where_clause (str): The SQL where clause.
+
+    RETURNS:
+      'lyr' (lyr): The layer/view with the selection on it.
+
+    FUNCTION:
+      To perform a selection on the object.
+    """
+
+    ##print 'Starting Select_Object()...'
+
+    # Use try/except to handle either object type (Feature Layer / Table)
+    try:
+        arcpy.MakeFeatureLayer_management(path_to_obj, 'lyr')
+    except:
+        arcpy.MakeTableView_management(path_to_obj, 'lyr')
+
+    ##print '  Selecting "lyr" with a selection type: {}, where: "{}"'.format(selection_type, where_clause)
+    arcpy.SelectLayerByAttribute_management('lyr', selection_type, where_clause)
+
+    ##print 'Finished Select_Object()\n'
+    return 'lyr'
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                        FUNCTION Get_Count_Selected()
+def Get_Count_Selected(lyr):
+    """
+    PARAMETERS:
+      lyr (lyr): The layer that should have a selection on it that we want to test.
+
+    RETURNS:
+      count_selected (int): The number of selected records in the lyr
+
+    FUNCTION:
+      To get the count of the number of selected records in the lyr.
+    """
+
+    ##print 'Starting Get_Count()...'
+
+    # See if there are any selected records
+    desc = arcpy.Describe(lyr)
+
+    if desc.fidSet: # True if there are selected records
+        result = arcpy.GetCount_management(lyr)
+        count_selected = int(result.getOutput(0))
+
+    # If there weren't any selected records
+    else:
+        count_selected = 0
+
+    ##print '  Count of Selected: {}'.format(str(count_selected))
+
+    ##print 'Finished Get_Count()\n'
+
+    return count_selected
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
