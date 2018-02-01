@@ -116,12 +116,6 @@ def main():
     #---------------------------------------------------------------------------
     #                 Non-standard Template Functions go HERE
 
-    # QA/QC AGOL data; edit / update the raw data if needed here
-    # TODO: add a function here to:
-    #   Log warning if NULL [IncidentName],
-    #   Log if duplicate [ReportNumber],
-    #   Log if NULL [ReportNumber]
-
     # Get the most recently downloaded data
     print '\n--------------------------------------------------------------------'
     arcpy.env.workspace = raw_agol_FGDB_path
@@ -153,14 +147,15 @@ def main():
 ##    Fields_Calculate_Fields(working_fc, calc_fields_csv)
 
     #---------------------------------------------------------------------------
-    # Handle data on a stacked parcel
-    # TODO: write function here
+    # Handle data on a stacked parcel.
+    # Stacked parcels are multiple APN's on one parcel footprint
+    working_fc = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Data\DA_Fire_Processing.gdb\DA_Fire_from_AGOL_2018_01_31__08_47_28_joined'
+    Handle_Stacked_Parcels(newest_download_path, working_fc, parcels_all)
 
     #---------------------------------------------------------------------------
     # QA/QC the data
-    working_fc = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Data\DA_Fire_Processing.gdb\DA_Fire_from_AGOL_2018_01_31__08_47_28_joined'
     QA_QC_log_file   = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Logs\QA_QC_Logs\DA_Fire_QA_QC'
-    QA_QC_Data(newest_download_path, working_fc, QA_QC_log_file, dt_to_append)
+##    QA_QC_Data(newest_download_path, working_fc, QA_QC_log_file, dt_to_append)
 
     #---------------------------------------------------------------------------
     # Backup the production database before attempting to edit it
@@ -174,48 +169,48 @@ def main():
     # Append the features from the working database to the prod database
 ##    Append_Data(working_fc, prod_FC_path)
 
-    #---------------------------------------------------------------------------
-    #                           Update AGOL fields
-    #---------------------------------------------------------------------------
-    #
-    #               Update (in AGOL) NULL [Quantity] to equal 1
-    print '\nUpdating (in AGOL) any records with a NULL [Quantity] to equal 1'
-
-    # Get list of Object IDs
-    where_clause = "Quantity IS NULL"
-    obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
-
-    # Update those Object IDs to have 1 in their [Quantity] field
-    field_to_update = 'Quantity'
-    new_value       = 1
-    for object_id in obj_ids:
-
-        AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
-
-
-    #           Update (in AGOL) NULL [EstimatedReplacementCost]
-    #                to equal (in working database) [EstimatedReplacementCost]
-    # Make a cursor that only looks at reports with an Estimated Replacement Cost
-    print '\nUpdating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
-    fields = ['EstimatedReplacementCost', 'ReportNumber']
-    cur_where_clause = "EstimatedReplacementCost IS NOT NULL"
-    print '  Cursor Where Clause: "{}"'.format(cur_where_clause)
-    with arcpy.da.SearchCursor(working_fc, fields, cur_where_clause) as cursor:
-        for row in cursor:
-            est_replcmt_cost = row[0]
-            report_number    = row[1]
-
-            # Get the object id of the AGOL feature with that report number
-            where_clause = "ReportNumber = {}".format(report_number)
-            obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
-
-            # Update the AGOL feature with that report number with the Estimated Replacement Cost
-            if (len(obj_ids) == 1):  # There should only be one object id with that report number
-                field_to_update = 'EstimatedReplacementCost'
-                new_value = est_replcmt_cost
-
-                for object_id in obj_ids:
-                    AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
+##    #---------------------------------------------------------------------------
+##    #                           Update AGOL fields
+##    #---------------------------------------------------------------------------
+##    #
+##    #               Update (in AGOL) NULL [Quantity] to equal 1
+##    print '\nUpdating (in AGOL) any records with a NULL [Quantity] to equal 1'
+##
+##    # Get list of Object IDs
+##    where_clause = "Quantity IS NULL"
+##    obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
+##
+##    # Update those Object IDs to have 1 in their [Quantity] field
+##    field_to_update = 'Quantity'
+##    new_value       = 1
+##    for object_id in obj_ids:
+##
+##        AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
+##
+##
+##    #           Update (in AGOL) NULL [EstimatedReplacementCost]
+##    #                to equal (in working database) [EstimatedReplacementCost]
+##    # Make a cursor that only looks at reports with an Estimated Replacement Cost
+##    print '\nUpdating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
+##    fields = ['EstimatedReplacementCost', 'ReportNumber']
+##    cur_where_clause = "EstimatedReplacementCost IS NOT NULL"
+##    print '  Cursor Where Clause: "{}"'.format(cur_where_clause)
+##    with arcpy.da.SearchCursor(working_fc, fields, cur_where_clause) as cursor:
+##        for row in cursor:
+##            est_replcmt_cost = row[0]
+##            report_number    = row[1]
+##
+##            # Get the object id of the AGOL feature with that report number
+##            where_clause = "ReportNumber = {}".format(report_number)
+##            obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
+##
+##            # Update the AGOL feature with that report number with the Estimated Replacement Cost
+##            if (len(obj_ids) == 1):  # There should only be one object id with that report number
+##                field_to_update = 'EstimatedReplacementCost'
+##                new_value = est_replcmt_cost
+##
+##                for object_id in obj_ids:
+##                    AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
 
     #---------------------------------------------------------------------------
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -726,6 +721,103 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
+#                          Function Handle Stacked Parcels
+def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_all):
+    """
+    PARAMETERS:
+
+    RETURNS:
+
+    FUNCTION:
+    """
+
+    print '--------------------------------------------------------------------'
+    print 'Starting Handle_Stacked_Parcels()'
+
+    print '  Starting to search each Report for stacked parcels\n'
+
+    # Create cursor to loop through each point in the orig_fc
+    with arcpy.da.SearchCursor(orig_fc, ['ReportNumber']) as orig_cursor:
+        for orig_row in orig_cursor:
+            report_number = orig_row[0]
+
+            # Select by attribute the feature in orig_fc
+            where_clause = "ReportNumber = '{}'".format(report_number)
+            ##print '  Searching where: {}'.format(where_clause)
+            selected_orig = Select_By_Attribute(orig_fc, 'NEW_SELECTION', where_clause)
+
+            # Select by location the parcels that intersect with the orig_fc point
+            ##print '  Selecting Parcels that intersect that report'
+            arcpy.MakeFeatureLayer_management(parcels_all, 'par_lyr')
+            arcpy.SelectLayerByLocation_management('par_lyr', 'INTERSECT', selected_orig)
+
+            # Get count of selected parcels
+            count_selected_parcels = Get_Count_Selected('par_lyr')
+
+            if count_selected_parcels > 1:  # Then the report is on a stacked parcel
+                print '  Report Number: {} is on a stacked parcel'.format(report_number)
+                print '  There are "{}" parcels associated with that report:'.format(count_selected_parcels)
+
+                # Test to see if the report_number is in the csv file that
+                # specifies which APN the point on a stacked parcel should be
+                # associated with
+
+
+
+                #---------------------------------------------------------------
+                # The below code will keep the reports with the APNs that are
+                # specified in the csv
+
+
+
+                #---------------------------------------------------------------
+                # The below code will keep the first Report, but will delete the
+                # subsequent reports that were created by the Spatial Join between
+                # the reports and the parcels.
+
+                # Get APN's of selected parcels
+                with arcpy.da.SearchCursor('par_lyr', ['APN']) as parcel_cursor:
+                    first_parcel = True
+
+                    for parcel_row in parcel_cursor:
+                        apn = parcel_row[0]
+
+                        # Allow the first report in the working_fc to be kept
+                        # but delete all the subsequent reports that were created
+                        # by the stacked parcels
+                        if first_parcel == False:
+                            print '    Report: {}, with APN: {}, will be deleted in: {}.'.format(report_number, apn, working_fc)
+                            where_clause = "ReportNumber = '{}' AND APN = '{}'".format(report_number, apn)
+                            ##print '    Selecting: {}\n    Where: {}'.format(working_fc, where_clause)
+                            working_lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
+                            count = Get_Count_Selected(working_lyr)
+                            if count != 0:
+                                print '    Deleting Feature\n'
+                                arcpy.DeleteFeatures_management(working_lyr)
+                            else:
+                                print '  NOTICE! There were no selected features with the above where clause'
+                                print '  Nothing deleted'
+
+                        else:
+                            print '\n    Report: {}, with APN: {}, will be kept.\n'.format(report_number, apn)
+                            # Change the flag to false so that we delete the
+                            # stacked parcel reports
+                            first_parcel = False
+
+                print '--------------------------------------------------------'
+
+
+
+
+
+
+
+
+    print 'Finished Handle_Stacked_Parcels()\n'
+    return
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #                          Function QA/QC Data
 def QA_QC_Data(orig_fc, working_fc, QA_QC_log_file, dt_to_append):
     """
@@ -807,7 +899,7 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_file, dt_to_append):
     # Select features that do not have a Report Number
     where_clause = "ReportNumber IS NULL or ReportNumber = '' "
     print '  At: {}\n  Where: {}\n'.format(working_fc, where_clause)
-    lyr = Select_Object(working_fc, 'NEW_SELECTION', where_clause)
+    lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
 
     # Get count of the number of features selected
     num_selected = Get_Count_Selected(lyr)
@@ -830,7 +922,7 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_file, dt_to_append):
     # Select features that do not have an Incident Name
     where_clause = "IncidentName IS NULL or IncidentName = '' "
     print '  At: {}\n  Where: {}\n'.format(working_fc, where_clause)
-    lyr = Select_Object(working_fc, 'NEW_SELECTION', where_clause)
+    lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
 
     # Get count of the number of features selected
     num_selected = Get_Count_Selected(lyr)
@@ -881,8 +973,8 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_file, dt_to_append):
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
-#                       FUNCTION Select_Object()
-def Select_Object(path_to_obj, selection_type, where_clause):
+#                       FUNCTION Select_By_Attribute()
+def Select_By_Attribute(path_to_obj, selection_type, where_clause=None):
     """
     PARAMETERS:
       path_to_obj (str): Full path to the object (Feature Class or Table) that
@@ -905,7 +997,7 @@ def Select_Object(path_to_obj, selection_type, where_clause):
       To perform a selection on the object.
     """
 
-    ##print 'Starting Select_Object()...'
+    ##print 'Starting Select_By_Attribute()...'
 
     # Use try/except to handle either object type (Feature Layer / Table)
     try:
@@ -916,7 +1008,7 @@ def Select_Object(path_to_obj, selection_type, where_clause):
     ##print '  Selecting "lyr" with a selection type: {}, where: "{}"'.format(selection_type, where_clause)
     arcpy.SelectLayerByAttribute_management('lyr', selection_type, where_clause)
 
-    ##print 'Finished Select_Object()\n'
+    ##print 'Finished Select_By_Attribute()\n'
     return 'lyr'
 
 #-------------------------------------------------------------------------------
