@@ -54,16 +54,20 @@ def main():
 
     # Set the working folder and FGDBs
     # TODO: some of these 'Process_Info' can be changed to 'Download Info'
+    # TODO: CLEAN up these paths, it is too complicated.
     wkg_folder           = config.get('Process_Info', 'wkg_folder')
     raw_agol_FGDB        = config.get('Process_Info', 'raw_agol_FGDB')
     raw_agol_FGDB_path   = '{}\{}'.format(wkg_folder, raw_agol_FGDB)
     processing_FGDB      = config.get('Process_Info', 'Processing_FGDB')
     processing_FGDB_path = '{}\{}'.format(wkg_folder, processing_FGDB)
-    prod_FC_path   = config.get('Process_Info', 'Prod_FC')
+    prod_FC_path         = config.get('Process_Info', 'Prod_FC')
+    AGOL_Data_DL_tbl     = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Data\DA_Current_Event.gdb\AGOL_Data_Last_Downloaded'
 
-    # Set the log file folder path
+
+    # Set the log file paths
     log_file_folder = config.get('Process_Info', 'Log_File_Folder')
     log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
+    QA_QC_log_folder = config.get('Process_Info', 'QA_QC_Log_Folder')
 
     # Set the Control_Files path
     control_file_folder = config.get('Process_Info', 'Control_Files')
@@ -72,6 +76,9 @@ def main():
 
     # Set the PARCELS_ALL Feature Class path
     parcels_all = config.get('Process_Info', 'Parcels_All')
+
+    # Set the PARCELS_ALL subset
+    parcels_extract = config.get('Process_Info', 'Parcels_Extract')
 
     # Set the Survey123 Feature Service variables
     name_of_FS = config.get('Download_Info', 'FS_names')
@@ -116,101 +123,103 @@ def main():
     #---------------------------------------------------------------------------
     #                 Non-standard Template Functions go HERE
 
-    # Get the most recently downloaded data
-    print '\n--------------------------------------------------------------------'
-    arcpy.env.workspace = raw_agol_FGDB_path
-    print 'Listing FCs in: {}'.format(raw_agol_FGDB_path)
-    AGOL_downloads = arcpy.ListFeatureClasses()  # List all FC's in the FGDB
-    for download in AGOL_downloads:
-        newest_download = download  # Only the last FC in the list is kept after the loop
-
-    newest_download_path = '{}\{}'.format(raw_agol_FGDB_path, newest_download)
-    print 'The newest download is at: {}\n'.format(newest_download_path)
+    # Get the path to the most recently downloaded data
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    orig_DA_reports_fc = Get_Newest_Downloaded_Data(raw_agol_FGDB_path)
 
     #---------------------------------------------------------------------------
-    # Spatially Join the downloaded data with the PARCELS_ALL
-    target_features   = newest_download_path
-    join_features     = parcels_all
-    working_fc = '{}\{}_joined'.format(processing_FGDB_path, newest_download)
-    join_operation =  'JOIN_ONE_TO_MANY'
-
-    print 'Spatially Joining:\n  {}\nWith:\n  {}\nNew FC at:\n  {}\n'.format(target_features, parcels_all, working_fc)
-##    arcpy.SpatialJoin_analysis(target_features, join_features, working_fc, join_operation)
+    # Set the date that the data was most recently downloaded
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL_tbl)
 
     #---------------------------------------------------------------------------
-    # Add Fields to downloaded DA Fire Data
-    ##working_fc = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Data\DA_Fire_Processing.gdb\DA_Fire_from_AGOL_2018_01_26__14_28_48'
-##    Fields_Add_Fields(working_fc, add_fields_csv)
+    # Get an extract of all parcels that overlap with the DA Reports
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    Extract_Parcels(parcels_all, orig_DA_reports_fc, parcels_extract)
 
     #---------------------------------------------------------------------------
-    # Calculate Fields
-##    Fields_Calculate_Fields(working_fc, calc_fields_csv)
+    # Spatially Join the DA Reports with the parcels_extract
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    working_fc = Join_DA_Reports_w_Parcels(orig_DA_reports_fc, processing_FGDB_path, parcels_extract)
 
     #---------------------------------------------------------------------------
     # Handle data on a stacked parcel.
     # Stacked parcels are multiple APN's on one parcel footprint
-    working_fc = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Data\DA_Fire_Processing.gdb\DA_Fire_from_AGOL_2018_01_31__08_47_28_joined'
-    Handle_Stacked_Parcels(newest_download_path, working_fc, parcels_all)
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    Handle_Stacked_Parcels(orig_DA_reports_fc, working_fc, parcels_extract)
+
+    #---------------------------------------------------------------------------
+    # Add Fields to downloaded DA Fire Data
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    Fields_Add_Fields(working_fc, add_fields_csv)
+
+    #---------------------------------------------------------------------------
+    # Calculate Fields
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    Fields_Calculate_Fields(working_fc, calc_fields_csv)
 
     #---------------------------------------------------------------------------
     # QA/QC the data
-    QA_QC_log_file   = r'P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Logs\QA_QC_Logs\DA_Fire_QA_QC'
-##    QA_QC_Data(newest_download_path, working_fc, QA_QC_log_file, dt_to_append)
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    QA_QC_Data(orig_DA_reports_fc, working_fc, QA_QC_log_folder, dt_to_append)
 
     #---------------------------------------------------------------------------
-    # Backup the production database before attempting to edit it
-##    Backup_FC(prod_FC_path)
+    # Backup the production FC before attempting to edit it
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    Backup_FC(prod_FC_path)
 
     #---------------------------------------------------------------------------
     #         Append newly processed data into the production database
     # Delete the features in the prod database
-##    Delete_Features(prod_FC_path)
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    Delete_Features(prod_FC_path)
 
     # Append the features from the working database to the prod database
-##    Append_Data(working_fc, prod_FC_path)
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    Append_Data(working_fc, prod_FC_path)
 
-##    #---------------------------------------------------------------------------
-##    #                           Update AGOL fields
-##    #---------------------------------------------------------------------------
-##    #
-##    #               Update (in AGOL) NULL [Quantity] to equal 1
-##    print '\nUpdating (in AGOL) any records with a NULL [Quantity] to equal 1'
-##
-##    # Get list of Object IDs
-##    where_clause = "Quantity IS NULL"
-##    obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
-##
-##    # Update those Object IDs to have 1 in their [Quantity] field
-##    field_to_update = 'Quantity'
-##    new_value       = 1
-##    for object_id in obj_ids:
-##
-##        AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
-##
-##
-##    #           Update (in AGOL) NULL [EstimatedReplacementCost]
-##    #                to equal (in working database) [EstimatedReplacementCost]
-##    # Make a cursor that only looks at reports with an Estimated Replacement Cost
-##    print '\nUpdating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
-##    fields = ['EstimatedReplacementCost', 'ReportNumber']
-##    cur_where_clause = "EstimatedReplacementCost IS NOT NULL"
-##    print '  Cursor Where Clause: "{}"'.format(cur_where_clause)
-##    with arcpy.da.SearchCursor(working_fc, fields, cur_where_clause) as cursor:
-##        for row in cursor:
-##            est_replcmt_cost = row[0]
-##            report_number    = row[1]
-##
-##            # Get the object id of the AGOL feature with that report number
-##            where_clause = "ReportNumber = {}".format(report_number)
-##            obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
-##
-##            # Update the AGOL feature with that report number with the Estimated Replacement Cost
-##            if (len(obj_ids) == 1):  # There should only be one object id with that report number
-##                field_to_update = 'EstimatedReplacementCost'
-##                new_value = est_replcmt_cost
-##
-##                for object_id in obj_ids:
-##                    AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
+    #---------------------------------------------------------------------------
+    #                           Update AGOL fields
+    #---------------------------------------------------------------------------
+    #TODO: put the below into its own function
+    #               Update (in AGOL) NULL [Quantity] to equal 1
+    print '\nUpdating (in AGOL) any records with a NULL [Quantity] to equal 1'
+
+    # Get list of Object IDs
+    where_clause = "Quantity IS NULL"
+    obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
+
+    # Update those Object IDs to have 1 in their [Quantity] field
+    field_to_update = 'Quantity'
+    new_value       = 1
+    for object_id in obj_ids:
+
+        AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
+
+
+    #           Update (in AGOL) NULL [EstimatedReplacementCost]
+    #                to equal (in working database) [EstimatedReplacementCost]
+    # Make a cursor that only looks at reports with an Estimated Replacement Cost
+    print '\nUpdating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
+    fields = ['EstimatedReplacementCost', 'ReportNumber']
+    cur_where_clause = "EstimatedReplacementCost IS NOT NULL"
+    print '  Cursor Where Clause: "{}"'.format(cur_where_clause)
+    with arcpy.da.SearchCursor(working_fc, fields, cur_where_clause) as cursor:
+        for row in cursor:
+            est_replcmt_cost = row[0]
+            report_number    = row[1]
+
+            # Get the object id of the AGOL feature with that report number
+            where_clause = "ReportNumber = {}".format(report_number)
+            obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
+
+            # Update the AGOL feature with that report number with the Estimated Replacement Cost
+            if (len(obj_ids) == 1):  # There should only be one object id with that report number
+                field_to_update = 'EstimatedReplacementCost'
+                new_value = est_replcmt_cost
+
+                for object_id in obj_ids:
+                    AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
 
     #---------------------------------------------------------------------------
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -407,6 +416,262 @@ def Get_Token(cfgFile, gtURL="https://www.arcgis.com/sharing/rest/generateToken"
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
+#                         FUNCTION: Get Newest Downloaded Data
+def Get_Newest_Downloaded_Data(raw_agol_FGDB_path):
+    """
+    PARAMETERS:
+
+    RETURNS:
+
+    FUNCTION:
+      To return the path of the newest downloaded data.  This works if the FGDB
+      being searched only contains one FC and that FC is time stamped as
+      'YYYY_MM_DD__HH_MM_SS'.  This means that the newest data will be the last
+      FC in the list.
+    """
+
+    print '--------------------------------------------------------------------'
+    print 'Starting Get_Newest_Downloaded_Data()'
+
+    arcpy.env.workspace = raw_agol_FGDB_path
+    print 'Finding the newest downloaded data in: {}'.format(raw_agol_FGDB_path)
+
+    # List all FC's in the FGDB
+    AGOL_downloads = arcpy.ListFeatureClasses()
+
+    for download in AGOL_downloads:
+        newest_download = download  # Only the last FC in the list is kept after the loop
+
+    # Set the path of the newest downloaded data
+    newest_download_path = '{}\{}'.format(raw_agol_FGDB_path, newest_download)
+    print 'The newest download is at:\n  {}\n'.format(newest_download_path)
+
+    print 'Finished Get_Newest_Downloaded_Data()\n'
+
+    return newest_download_path
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#            FUNCTION: Set Date the AGOL DA Reports were Downloaded
+def Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL_tbl):
+    """
+    PARAMETERS:
+
+    RETURNS:
+
+    FUNCTION:
+    """
+    print '--------------------------------------------------------------------'
+    print 'Starting Set_Date_DA_Reports_DL()'
+
+    import time
+
+    # Get the last 20 characters from the FC name (i.e. "2018_02_02__11_11_33")
+    dt_stripped = orig_DA_reports_fc[-20:]
+
+    # Parse the string to time and format the time
+    t = time.strptime(dt_stripped, '%Y_%m_%d__%H_%M_%S')
+    t_formatted = time.mktime(t)
+
+    # Format time back into a string (i.e. "02 February, 2018 - 11:11:33 AM"
+    AGOL_data_downloaded = time.strftime("%d %B, %Y - %I:%M:%S %p", time.localtime(t_formatted))
+
+    # Field Calculate the string into the AGOL_Data_DL_tbl
+    table = AGOL_Data_DL_tbl
+    field = 'AGOL_Data_Last_Downloaded'
+    expression = '"{}"'.format(AGOL_data_downloaded)
+
+    print '  Calculating field:\n    {}\n  In table:\n    {} '.format(field, table)
+    print '  To equal:\n    {}'.format(expression)
+
+    arcpy.CalculateField_management(table, field, expression)
+
+    print 'Finished Set_Date_DA_Reports_DL()'
+    return
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                         FUNCTION: Extract Parcels
+def Extract_Parcels(parcels_all, orig_fc, parcels_int_orig_fc):
+    """
+    PARAMETERS:
+
+    RETURNS:
+
+    FUNCTION:
+    """
+    print '--------------------------------------------------------------------'
+    print 'Starting Extract_Parcels()'
+
+    # Make a feature layer out of the PARCELS_ALL FC
+    arcpy.MakeFeatureLayer_management(parcels_all, 'par_all_lyr')
+
+    # Select Parcels that intersect with the DA Reports
+    print '  Selecting parcels that intersect with the DA Reports'
+    arcpy.SelectLayerByLocation_management('par_all_lyr', 'INTERSECT', orig_fc)
+
+    # Get count of selected parcels
+    count = Get_Count_Selected('par_all_lyr')
+    print '  There are: "{}" selected parcels'.format(count)
+
+    # Export selected parcels
+    if (count != 0):
+        print '  Deleting the existing features at: {}'.format(parcels_int_orig_fc)
+
+        # Delete the existing features
+        arcpy.DeleteFeatures_management(parcels_int_orig_fc)
+
+        # Append the newly selected features
+        print '  Appending the selected parcels to the above FC'
+        arcpy.Append_management('par_all_lyr', parcels_int_orig_fc, 'NO_TEST')
+
+    print 'Finished Extract_Parcels()\n'
+
+    return
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                         FUNCTION: Join DA Reports with Parcels Extract
+def Join_DA_Reports_w_Parcels(newest_download_path, processing_FGDB_path, parcels_extract):
+    """
+    PARAMETERS:
+
+    RETURNS:
+
+    FUNCTION:
+    """
+    print '--------------------------------------------------------------------'
+    print 'Starting Join_DA_Reports_w_Parcels()'
+
+    target_features  = newest_download_path
+    join_features    = parcels_extract
+    working_fc       = '{}\{}_joined'.format(processing_FGDB_path, os.path.basename(newest_download_path))
+    join_operation   = 'JOIN_ONE_TO_MANY'
+
+    print '  Spatially Joining:\n    {}\n  With:\n    {}\n  Joined FC at:\n    {}\n'.format(target_features, join_features, working_fc)
+    arcpy.SpatialJoin_analysis(target_features, join_features, working_fc, join_operation)
+
+    print 'Finished Join_DA_Reports_w_Parcels()\n'
+
+    return working_fc
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                          Function Handle Stacked Parcels
+def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc):
+    """
+    PARAMETERS:
+
+    RETURNS:
+
+    FUNCTION:
+    """
+
+    print '--------------------------------------------------------------------'
+    print 'Starting Handle_Stacked_Parcels()'
+
+    ignore_fields = ['OBJECTID', 'Shape', 'Shape.area', 'Shape.len',
+                     'Shape_Area', 'Shape_Length']
+
+    print '  Starting to search each Report for stacked parcels\n'
+
+    # Create cursor to loop through each point in the orig_fc
+    with arcpy.da.SearchCursor(orig_fc, ['ReportNumber']) as orig_cursor:
+        for orig_row in orig_cursor:
+            report_number = orig_row[0]
+
+            # Select by attribute the feature in orig_fc
+            where_clause = "ReportNumber = '{}'".format(report_number)
+            ##print '  Searching where: {}'.format(where_clause)
+            selected_orig = Select_By_Attribute(orig_fc, 'NEW_SELECTION', where_clause)
+
+            # Select by location the parcels that intersect with the orig_fc point
+            ##print '  Selecting Parcels that intersect that report'
+            arcpy.MakeFeatureLayer_management(parcels_fc, 'par_lyr')
+            arcpy.SelectLayerByLocation_management('par_lyr', 'INTERSECT', selected_orig)
+
+            # Get count of selected parcels
+            count_selected_parcels = Get_Count_Selected('par_lyr')
+
+            if count_selected_parcels > 1:  # Then the report is on a stacked parcel
+                print '  Report Number: {} is on a stacked parcel'.format(report_number)
+                print '  There are "{}" parcels associated with that report:'.format(count_selected_parcels)
+
+                # Test to see if the report_number is in the csv file that
+                # specifies which APN the point on a stacked parcel should be
+                # associated with
+
+
+
+                #---------------------------------------------------------------
+                # The below code will keep the reports with the APNs that are
+                # specified in the csv
+
+
+
+                #---------------------------------------------------------------
+                # The below code will keep the first Report, but will delete the
+                # subsequent reports that were created by the Spatial Join between
+                # the reports and the parcels.
+
+                # Get APN's of selected parcels
+                with arcpy.da.SearchCursor('par_lyr', ['APN']) as parcel_cursor:
+                    first_parcel = True
+
+                    for parcel_row in parcel_cursor:
+                        apn = parcel_row[0]
+                        where_clause = "ReportNumber = '{}' AND APN = '{}'".format(report_number, apn)
+                        print '    Selecting: {}\n    Where: {}'.format(working_fc, where_clause)
+                        working_lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
+                        count = Get_Count_Selected(working_lyr)
+
+                        # Allow the first report in the working_fc to be kept
+                        # but delete all the subsequent reports that were created
+                        # by the stacked parcels
+                        if first_parcel == False:
+                            print '    Report: {}, with APN: {}, will be deleted.'.format(report_number, apn)
+
+                            if count != 0:
+                                print '    Deleting Feature\n'
+                                arcpy.DeleteFeatures_management(working_lyr)
+                            else:
+                                print '  NOTICE! There were no selected features with the above where clause'
+                                print '  Nothing deleted\n'
+
+                        # Keep the first report, but nullify all the information
+                        # that came from the parcels_fc (Since we don't know which APN is correct)
+                        else:
+                            if count == 1:
+                                print '\n    Report: {}, with APN: {}, will be kept.'.format(report_number, apn)
+                                print '    But nullifying All parcel info\n'
+
+                                # Get list of field names
+                                parcel_field_names = [f.name for f in arcpy.ListFields(parcels_fc)]
+
+                                # Nullify each field that came from the parcel_fc
+                                for f_name in parcel_field_names:
+                                    if f_name not in ignore_fields:
+                                        python_f_name = '!{}!'.format(f_name)
+                                        expression = "None"
+                                        ##print '    Nullifying Field: {}'.format(f_name)
+                                        arcpy.CalculateField_management(working_lyr, f_name, expression, 'PYTHON_9.3')
+
+                            else:
+                                print 'Count didn\'t equal 1'
+                            # Change the flag to false so that we delete the
+                            # stacked parcel reports
+                            first_parcel = False
+
+                print '  ------------------------------------------------------'
+
+
+
+
+
+    print 'Finished Handle_Stacked_Parcels()\n'
+    return
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #                        FUNCTION: ADD FIELDS
 
 def Fields_Add_Fields(wkg_data, add_fields_csv):
@@ -427,7 +692,7 @@ def Fields_Add_Fields(wkg_data, add_fields_csv):
 
     print '--------------------------------------------------------------------'
     print 'Starting Fields_Add_Fields()'
-    print ' Adding fields to:\n  %s' % wkg_data
+    print '  Adding fields to:\n    %s' % wkg_data
     print '  Using Control CSV at:\n    {}\n'.format(add_fields_csv)
     with open (add_fields_csv) as csv_file:
         readCSV = csv.reader(csv_file, delimiter = ',')
@@ -450,11 +715,11 @@ def Fields_Add_Fields(wkg_data, add_fields_csv):
             row_num += 1
 
     num_new_fs = len(f_names)
-    print '    There are %s new fields to add:' % str(num_new_fs)
+    print '  There are %s new fields to add:' % str(num_new_fs)
 
     f_counter = 0
     while f_counter < num_new_fs:
-        print ('      Creating field: %s, with a type of: %s, and a length of: %s'
+        print ('    Creating field: %s, with a type of: %s, and a length of: %s'
         % (f_names[f_counter], f_types[f_counter], f_lengths[f_counter]))
 
         in_table          = wkg_data
@@ -479,7 +744,7 @@ def Fields_Add_Fields(wkg_data, add_fields_csv):
             print str(e)
         f_counter += 1
 
-    print 'Finished Fields_Add_Fields().\n'
+    print '\nFinished Fields_Add_Fields().\n'
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -505,7 +770,7 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
 
     print '--------------------------------------------------------------------'
     print 'Starting Fields_Calculate_Fields()'
-    print ' Calculating fields in:\n  %s' % wkg_data
+    print '  Calculating fields in:\n    %s' % wkg_data
     print '  Using Control CSV at:\n    {}\n'.format(calc_fields_csv)
 
     # Make a table view so we can perform selections
@@ -534,7 +799,7 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
             row_num += 1
 
     num_calcs = len(where_clauses)
-    print '    There are %s calculations to perform:\n' % str(num_calcs)
+    print '  There are %s calculations to perform:\n' % str(num_calcs)
 
     #---------------------------------------------------------------------------
     #                    Select features and calculate them
@@ -547,7 +812,7 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
         selection_type   = 'NEW_SELECTION'
         my_where_clause  = where_clauses[f_counter]
 
-        print '      Selecting features where: "%s"' % my_where_clause
+        print '    Selecting features where: "%s"' % my_where_clause
 
         # Process
         arcpy.SelectLayerByAttribute_management(in_layer_or_view, selection_type, my_where_clause)
@@ -559,7 +824,7 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
 
         countOfSelected = arcpy.GetCount_management(in_layer_or_view)
         count = int(countOfSelected.getOutput(0))
-        print '        There was/were %s feature(s) selected.' % str(count)
+        print '      There was/were %s feature(s) selected.' % str(count)
 
         if count != 0:
             in_table   = in_layer_or_view
@@ -571,7 +836,10 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
             if (field == 'SiteFullAddress'):
 
                 try:
-                    fields = ['SITUS_ADDRESS', 'SITUS_PRE_DIR', 'SITUS_STREET', 'SITUS_SUFFIX', 'SITUS_POST_DIR', 'SITUS_SUITE', 'SiteFullAddress']
+                    fields = ['SITUS_ADDRESS', 'SITUS_PRE_DIR', 'SITUS_STREET',
+                              'SITUS_SUFFIX', 'SITUS_POST_DIR', 'SITUS_SUITE',
+                              'SiteFullAddress']
+
                     with arcpy.da.UpdateCursor(in_table, fields) as cursor:
                         for row in cursor:
                             SITUS_ADDRESS  = row[0]
@@ -599,7 +867,7 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
                             cursor.updateRow(row)
                     del cursor
 
-                    print ('        From the selected features, special calculated field: {}, so that it equals a concatenation of Situs Address Fields\n'.format(field))
+                    print ('      From the selected features, special calculated field: {}, so that it equals a concatenation of Situs Address Fields\n'.format(field))
 
                 except Exception as e:
                     print '*** WARNING! Field: %s was not able to be calculated.***' % field
@@ -643,7 +911,8 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
             elif (field == 'OwnerFullAddress'):
 
                 try:
-                    fields = ['OWN_ADDR1', 'OWN_ADDR2', 'OWN_ADDR3', 'OWN_ADDR4', 'OwnerFullAddress']
+                    fields = ['OWN_ADDR1', 'OWN_ADDR2', 'OWN_ADDR3',
+                              'OWN_ADDR4', 'OwnerFullAddress']
                     with arcpy.da.UpdateCursor(in_table, fields) as cursor:
                         for row in cursor:
 
@@ -718,108 +987,12 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
         f_counter += 1
 
     print 'Finished Fields_Calculate_Fields().\n'
-
-#-------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
-#                          Function Handle Stacked Parcels
-def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_all):
-    """
-    PARAMETERS:
-
-    RETURNS:
-
-    FUNCTION:
-    """
-
-    print '--------------------------------------------------------------------'
-    print 'Starting Handle_Stacked_Parcels()'
-
-    print '  Starting to search each Report for stacked parcels\n'
-
-    # Create cursor to loop through each point in the orig_fc
-    with arcpy.da.SearchCursor(orig_fc, ['ReportNumber']) as orig_cursor:
-        for orig_row in orig_cursor:
-            report_number = orig_row[0]
-
-            # Select by attribute the feature in orig_fc
-            where_clause = "ReportNumber = '{}'".format(report_number)
-            ##print '  Searching where: {}'.format(where_clause)
-            selected_orig = Select_By_Attribute(orig_fc, 'NEW_SELECTION', where_clause)
-
-            # Select by location the parcels that intersect with the orig_fc point
-            ##print '  Selecting Parcels that intersect that report'
-            arcpy.MakeFeatureLayer_management(parcels_all, 'par_lyr')
-            arcpy.SelectLayerByLocation_management('par_lyr', 'INTERSECT', selected_orig)
-
-            # Get count of selected parcels
-            count_selected_parcels = Get_Count_Selected('par_lyr')
-
-            if count_selected_parcels > 1:  # Then the report is on a stacked parcel
-                print '  Report Number: {} is on a stacked parcel'.format(report_number)
-                print '  There are "{}" parcels associated with that report:'.format(count_selected_parcels)
-
-                # Test to see if the report_number is in the csv file that
-                # specifies which APN the point on a stacked parcel should be
-                # associated with
-
-
-
-                #---------------------------------------------------------------
-                # The below code will keep the reports with the APNs that are
-                # specified in the csv
-
-
-
-                #---------------------------------------------------------------
-                # The below code will keep the first Report, but will delete the
-                # subsequent reports that were created by the Spatial Join between
-                # the reports and the parcels.
-
-                # Get APN's of selected parcels
-                with arcpy.da.SearchCursor('par_lyr', ['APN']) as parcel_cursor:
-                    first_parcel = True
-
-                    for parcel_row in parcel_cursor:
-                        apn = parcel_row[0]
-
-                        # Allow the first report in the working_fc to be kept
-                        # but delete all the subsequent reports that were created
-                        # by the stacked parcels
-                        if first_parcel == False:
-                            print '    Report: {}, with APN: {}, will be deleted in: {}.'.format(report_number, apn, working_fc)
-                            where_clause = "ReportNumber = '{}' AND APN = '{}'".format(report_number, apn)
-                            ##print '    Selecting: {}\n    Where: {}'.format(working_fc, where_clause)
-                            working_lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
-                            count = Get_Count_Selected(working_lyr)
-                            if count != 0:
-                                print '    Deleting Feature\n'
-                                arcpy.DeleteFeatures_management(working_lyr)
-                            else:
-                                print '  NOTICE! There were no selected features with the above where clause'
-                                print '  Nothing deleted'
-
-                        else:
-                            print '\n    Report: {}, with APN: {}, will be kept.\n'.format(report_number, apn)
-                            # Change the flag to false so that we delete the
-                            # stacked parcel reports
-                            first_parcel = False
-
-                print '--------------------------------------------------------'
-
-
-
-
-
-
-
-
-    print 'Finished Handle_Stacked_Parcels()\n'
     return
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                          Function QA/QC Data
-def QA_QC_Data(orig_fc, working_fc, QA_QC_log_file, dt_to_append):
+def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append):
     """
     PARAMETERS:
 
@@ -839,11 +1012,11 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_file, dt_to_append):
     orig_logfile = sys.stdout
 
     # Create the log file with the datetime appended to the file name
-    log_file_date = '{}_{}.log'.format(QA_QC_log_file,dt_to_append)
+    log_file_date = '{}\DA_Fire_QA_QC_{}.log'.format(QA_QC_log_folder,dt_to_append)
     write_to_log = open(log_file_date, 'w')
 
     # Make the 'print' statement write to the QA/QC log file
-    print 'Find log file found at:\n  {}'.format(log_file_date)
+    print '\n  Find log file found at:\n    {}'.format(log_file_date)
     sys.stdout = write_to_log
 
     #===========================================================================
@@ -851,6 +1024,7 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_file, dt_to_append):
 
     # Make a header for the new QA/QC log file
     print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+    print '                   Start DA Fire QA/QC Log'
     print 'This is the log file for any QA/QC checks that were performed by the'
     print 'Process_DA_Fire_Data.py script on the downloaded AGOL'
     print 'Fire Damage Assessment data'
@@ -961,15 +1135,17 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_file, dt_to_append):
         print '  OK! There were no features without a Report Number'
 
     #---------------------------------------------------------------------------
-    #     5) Check to see if [SITUS_ADDRESS] is in [StreetNumber_Usr]
-    # TODO: See if this makes sense to write up...
-
+    # Make a footer for the new QA/QC log file
+    print ''
+    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+    print '                      End DA Fire QA/QC'
+    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
 
     #---------------------------------------------------------------------------
     # Return the print statement to write to our general log file
     sys.stdout = orig_logfile
     #===========================================================================
-    print 'Finished QA_QC_Data()\n'
+    print '\nFinished QA_QC_Data()\n'
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -1074,8 +1250,7 @@ def Backup_FC(full_path_to_fc):
     out_name    = '{}_BAK'.format(os.path.basename(full_path_to_fc))
 
     print '  Backing up FC: {}'.format(in_features)
-    print '             To: {}'.format(out_path)
-    print '             As: {}'.format(out_name)
+    print '             To: {}\{}'.format(out_path, out_name)
 
     arcpy.FeatureClassToFeatureClass_conversion (in_features, out_path, out_name)
 
