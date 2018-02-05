@@ -486,7 +486,7 @@ def Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL_tbl):
 
     arcpy.CalculateField_management(table, field, expression)
 
-    print 'Finished Set_Date_DA_Reports_DL()'
+    print 'Finished Set_Date_DA_Reports_DL()\n'
     return
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -569,9 +569,15 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc):
     print '--------------------------------------------------------------------'
     print 'Starting Handle_Stacked_Parcels()'
 
+    #---------------------------------------------------------------------------
+    # Lists
     ignore_fields = ['OBJECTID', 'Shape', 'Shape.area', 'Shape.len',
-                     'Shape_Area', 'Shape_Length']
+                     'Shape_Area', 'Shape_Length']  # List of fields that should not be attempted to be nullified
 
+##    keep_features_where   = []  # List to hold all the features that should be kept but have their APN fields nullified
+##    delete_features_where = []  # List to hold all the features that should be deleted because they are on stacked parcels
+
+    #---------------------------------------------------------------------------
     print '  Starting to search each Report for stacked parcels\n'
 
     # Create cursor to loop through each point in the orig_fc
@@ -609,65 +615,127 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc):
 
 
                 #---------------------------------------------------------------
-                # The below code will keep the first Report, but will delete the
+                # The below code will keep the first Report, but will mark for
+                # deletion the
                 # subsequent reports that were created by the Spatial Join between
                 # the reports and the parcels.
 
-                # Get APN's of selected parcels
-                with arcpy.da.SearchCursor('par_lyr', ['APN']) as parcel_cursor:
-                    first_parcel = True
+                # Get APN's of selected parcels from the parcels_fc's layer (par_lyr)
+                with arcpy.da.SearchCursor('par_lyr', ['APN', 'APN_8']) as parcel_cursor:
 
                     for parcel_row in parcel_cursor:
                         apn = parcel_row[0]
                         where_clause = "ReportNumber = '{}' AND APN = '{}'".format(report_number, apn)
-                        print '    Selecting: {}\n    Where: {}'.format(working_fc, where_clause)
-                        working_lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
-                        count = Get_Count_Selected(working_lyr)
 
-                        # Allow the first report in the working_fc to be kept
-                        # but delete all the subsequent reports that were created
-                        # by the stacked parcels
-                        if first_parcel == False:
-                            print '    Report: {}, with APN: {}, will be deleted.'.format(report_number, apn)
+                        # Make a cursor to loop through all the Features in the working_fc
+                        # and either mark them 'Nullify' or 'Delete'
+                        with arcpy.da.UpdateCursor(working_fc, ['APN', 'APN_8'], where_clause) as working_cursor:
+                            first_parcel = True
+                            for working_row in working_cursor:
 
-                            if count != 0:
-                                print '    Deleting Feature\n'
-                                arcpy.DeleteFeatures_management(working_lyr)
-                            else:
-                                print '  NOTICE! There were no selected features with the above where clause'
-                                print '  Nothing deleted\n'
+                                # Keep the first feature, and add the where_clause to a
+                                # list that will be used to nullify the APN fields
+                                # that came from the parcels_fc
+                                # (Since we don't know which APN info is correct)
+                                if first_parcel == True:
+                                    print '\n    Report: {}, with APN: {}, will be kept.  But all APN info will be nullified.\n'.format(report_number, apn)
+    ##                                keep_features_where.append("ReportNumber = '{}' AND APN = '{}'".format(report_number, apn))
+                                    working_row[1] = 'Nullify'
+                                    working_cursor.updateRow(working_row)
 
-                        # Keep the first report, but nullify all the information
-                        # that came from the parcels_fc (Since we don't know which APN is correct)
-                        else:
-                            if count == 1:
-                                print '\n    Report: {}, with APN: {}, will be kept.'.format(report_number, apn)
-                                print '    But nullifying All parcel info\n'
+                                    # Change the flag to false so that we delete the
+                                    # stacked parcel reports
+                                    first_parcel = False
 
-                                # Get list of field names
-                                parcel_field_names = [f.name for f in arcpy.ListFields(parcels_fc)]
+                                # Add the subsequent features where_clause to a list
+                                # that will be used to delete these features at one time
+                                elif first_parcel == False:
+                                    print '    Report: {}, with APN: {}, will be deleted.\n'.format(report_number, apn)
+                                    working_row[1] = 'Delete'
+                                    working_cursor.updateRow(working_row)
+        ##                                delete_features_where.append("ReportNumber = '{}' AND APN = '{}'".format(report_number, apn))
 
-                                # Nullify each field that came from the parcel_fc
-                                for f_name in parcel_field_names:
-                                    if f_name not in ignore_fields:
-                                        python_f_name = '!{}!'.format(f_name)
-                                        expression = "None"
-                                        ##print '    Nullifying Field: {}'.format(f_name)
-                                        arcpy.CalculateField_management(working_lyr, f_name, expression, 'PYTHON_9.3')
 
-                            else:
-                                print 'Count didn\'t equal 1'
-                            # Change the flag to false so that we delete the
-                            # stacked parcel reports
-                            first_parcel = False
+                        del working_cursor
+                        ##print '    Selecting: {}\n    Where: {}'.format(working_fc, where_clause)
+##                        working_lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
+##                        count = Get_Count_Selected(working_lyr)
+
+
+
+
+
+
 
                 print '  ------------------------------------------------------'
 
+    print '  ------------------------------------------------------------------'
+    #---------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
 
+    #                Handle the features that were marked for 'Nullify', or 'Delete' above
 
+    #---------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
+    #          Nullify the APN fields on the features that were kept
+    #         but we don't know which stacked APN the report belongs to
 
+    print '  Nullifying All APN info for features not in the CSV\n'
+
+    # Select the features that should have their APN info nullified
+##    arcpy.MakeFeatureLayer_management(working_fc, 'f_to_nullify_APN')
+
+##    for where_clause in keep_features_where:
+##        print '  In working_fc, selecting features where: {}'.format(where_clause)
+##        arcpy.SelectLayerByAttribute_management('f_to_nullify_APN', 'ADD_TO_SELECTION', where_clause)
+    where_clause = "APN_8 = 'Nullify'"
+    f_to_nullify_APN = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
+
+    count = Get_Count_Selected(f_to_nullify_APN)
+
+    if count != 0:
+        # Get list of field names in the parcels_fc
+        parcel_field_names = [f.name for f in arcpy.ListFields(parcels_fc)]
+
+        # Nullify each field that came from the parcel_fc
+        for f_name in parcel_field_names:
+            if f_name not in ignore_fields:
+                python_f_name = '!{}!'.format(f_name)
+                expression = "None"
+                ##print '    Nullifying Field: {}'.format(f_name)
+##                arcpy.CalculateField_management(f_to_nullify_APN, f_name, expression, 'PYTHON_9.3')
+
+    else:
+        print '*** WARNING! There were no selected features with the above where clause ***'
+        print '  Nothing to be nullified\n'
+
+    #---------------------------------------------------------------------------
+    #          Delete the extra features that were created by the join with the
+    #          stacked parcels
+
+    print '  Deleting extra features created by the join with stacked parcels\n'
+
+    # Select the features that should be deleted
+    arcpy.MakeFeatureLayer_management(working_fc, 'f_to_delete')
+
+    for where_clause in delete_features_where:
+        print '  In working_fc, selecting features where: {}'.format(where_clause)
+        arcpy.SelectLayerByAttribute_management('f_to_delete', 'ADD_TO_SELECTION', where_clause)
+
+    count = Get_Count_Selected(working_lyr)
+
+    if count != 0:
+        print '  Deleting selected features'
+        arcpy.DeleteFeatures_management('f_to_delete')
+
+    else:
+        print '*** WARNING! There were no selected features with the above where clause ***'
+        print '  Nothing to be deleted\n'
 
     print 'Finished Handle_Stacked_Parcels()\n'
+
+    delete_me
+
     return
 
 #-------------------------------------------------------------------------------
@@ -1063,7 +1131,7 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append):
         print '  the same 1/100th of a second.'
 
     else:
-        print '  OK! There were no duplicate Report Numbers'
+        print '  OK! There were no duplicate Report Numbers.'
 
     #---------------------------------------------------------------------------
     #      2) Check to see if any features have NULL in the field [ReportNumber]
@@ -1080,13 +1148,13 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append):
 
     # Report findings
     if num_selected > 0:
-        print '  WARNING! There were {} features without a Report Number at the time the data was downloaded'.format(num_selected)
-        print '\n  LUEG-GIS, please log onto AGOL and find out why there is no Report Number for these features'
+        print '  WARNING! There were {} features without a Report Number at the time the data was downloaded.'.format(num_selected)
+        print '\n  LUEG-GIS, please log onto AGOL and find out why there is no Report Number for these features.'
         print '  Survey123 should auto generate report numbers, so if there is a record w/o a Report Number'
         print '  it is possible that the record was created by the AGOL Web Map.  If so, this is against normal workflow'
-        print '  and must be investigated'
+        print '  and must be investigated.'
     else:
-        print '  OK! There were no features without a Report Number'
+        print '  OK! There were no features without a Report Number.'
 
     #---------------------------------------------------------------------------
     #      3) Check to see if any features have NULL in [IncidentName]
@@ -1104,10 +1172,10 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append):
     # Report findings
     if num_selected > 0:
         print '  WARNING! There were "{}" features without an Incident Name at the time the data was downloaded.'.format(num_selected)
-        print '  It is expected that LUEG-GIS staff will fill out the Incident Name as needed'
-        print '\n  LUEG-GIS, please log onto AGOL and fill out an Incident Name for these features'
+        print '  It is expected that LUEG-GIS staff will fill out the Incident Name as needed.'
+        print '\n  LUEG-GIS, please log onto AGOL and fill out an Incident Name for these features.'
     else:
-        print '  OK! There were no features without an Incident Name'
+        print '  OK! There were no features without an Incident Name.'
 
     #---------------------------------------------------------------------------
     #      4) Check to see if any features have NULL in [APN]
@@ -1124,7 +1192,7 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append):
 
     # Report findings
     if (len(no_apns) > 0):
-        print '  WARNING! There were {} features without an APN at the time the data was downloaded'.format(len(no_apns))
+        print '  WARNING! There were {} features without an APN at the time the data was downloaded.'.format(len(no_apns))
         print '  Report Number:'
         for no_apn in no_apns:
             print '    {}'.format(no_apn)
@@ -1132,7 +1200,7 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append):
         print '  Any Damage Assessment Staff, please log onto AGOL Web Map'
         print '  and move the features with the above Report Numbers to the correct parcel.'
     else:
-        print '  OK! There were no features without a Report Number'
+        print '  OK! There were no features without a Report Number.'
 
     #---------------------------------------------------------------------------
     # Make a footer for the new QA/QC log file
