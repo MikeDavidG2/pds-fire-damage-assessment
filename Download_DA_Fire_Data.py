@@ -217,7 +217,7 @@ def main():
         print '\n*** ERROR with {} ***'.format(name_of_script)
         print 'Please see log file (noted above) for troubleshooting\n'
 
-    if called_by == 'MANUAL':
+    if called_by == '':
         raw_input('Press ENTER to continue')
 
 #-------------------------------------------------------------------------------
