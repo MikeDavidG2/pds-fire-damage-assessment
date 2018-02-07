@@ -73,7 +73,7 @@ def main():
 
 
     # Set CSV that looks for Report Number / APN pairs (for stacked parcels)
-    match_Report_to_APN  = config.get('Process_Info', 'Report_to_APN_csv')
+    match_Report_to_APN_csv  = config.get('Process_Info', 'Report_to_APN_csv')
 
 
     # Set the log file paths
@@ -121,14 +121,14 @@ def main():
             print '*** ERROR with Write_Print_To_Log() ***'
             print str(e)
 
-    # Get a token with permissions to view the AGOL data
-    if success == True:
-        try:
-            token = Get_Token(cfgFile)
-        except Exception as e:
-            success = False
-            print '*** ERROR with Get_Token() ***'
-            print str(e)
+##    # Get a token with permissions to view the AGOL data
+##    if success == True:
+##        try:
+##            token = Get_Token(cfgFile)
+##        except Exception as e:
+##            success = False
+##            print '*** ERROR with Get_Token() ***'
+##            print str(e)
 
 
     #---------------------------------------------------------------------------
@@ -159,7 +159,7 @@ def main():
     # Handle data on a stacked parcel.
     # Stacked parcels are multiple APN's on one parcel footprint
     print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    Handle_Stacked_Parcels(orig_DA_reports_fc, working_fc, parcels_extract_path, match_Report_to_APN)
+    Handle_Stacked_Parcels(orig_DA_reports_fc, working_fc, parcels_extract_path, match_Report_to_APN_csv)
 
     #---------------------------------------------------------------------------
     # Add Fields to downloaded DA Fire Data
@@ -174,7 +174,7 @@ def main():
     #---------------------------------------------------------------------------
     # QA/QC the data
     print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    QA_QC_Data(orig_DA_reports_fc, working_fc, QA_QC_log_folder, dt_to_append)
+    QA_QC_Data(orig_DA_reports_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract_path, match_Report_to_APN_csv)
 
     #---------------------------------------------------------------------------
     # Backup the production FC before attempting to edit it
@@ -452,8 +452,9 @@ def Get_Newest_Downloaded_Data(raw_agol_FGDB_path):
     # List all FC's in the FGDB
     AGOL_downloads = arcpy.ListFeatureClasses()
 
-    for download in AGOL_downloads:
-        newest_download = download  # Only the last FC in the list is kept after the loop
+    # Sort the FC's alphabetically in reverse (this ensures the most recent date is first)
+    AGOL_downloads.sort(reverse=True)
+    newest_download = AGOL_downloads[0]
 
     # Set the path of the newest downloaded data
     newest_download_path = '{}\{}'.format(raw_agol_FGDB_path, newest_download)
@@ -581,10 +582,10 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
 
     print '--------------------------------------------------------------------'
     print 'Starting Handle_Stacked_Parcels()'
-
+    print '  Working FC at:\n    {}'.format(working_fc)
     # TODO: Figure out how to handle if a report is in the CSV file for more than one APN
     # TODO: Edit comments
-    # TODO: Document this script
+    # TODO: Document this function
 
     import csv
 
@@ -595,7 +596,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
 
     #---------------------------------------------------------------------------
     # Get list of Report Numbers / APN pairs from the CSV file
-    print '  Creating Report Number and APN lists from CSV at:\n    {}'.format(match_report_to_APN)
+    print '\n  Creating Report Number and APN lists from CSV at:\n    {}'.format(match_report_to_APN)
     with open (match_report_to_APN) as csv_file:
         readCSV = csv.reader(csv_file, delimiter = ',')
 
@@ -648,14 +649,14 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
                 # associated with
                 if report_number in r_numbers_csv:
 
-                    # Get the index of the Report Number in the CSV
+                    # Get the first index of the Report Number in the CSV
                     try:
                         csv_index = r_numbers_csv.index(report_number)
-                        print '  Index in CSV where that report / APN reside = {}'.format(csv_index)
+                        ##print '  Index in CSV where that report / APN reside = {}'.format(csv_index)
                     except ValueError:
                         print '*** Warning No index returned ***'
 
-                    # Test to make sure that the CSV paired report number and apn
+                    # Test to make sure that the Report Number / APN pair in the CSV
                     # exist in the working_fc
                     where_clause = "ReportNumber = '{}' and APN = '{}'".format(r_numbers_csv[csv_index], apns_csv[csv_index])
                     lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
@@ -664,14 +665,14 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
                         report_in_csv = True
                         print '    Report / APN pair in CSV is found in working_fc'
                     else:
-                        # If the report number / APN pair in the CSV does not match with
+                        # If the first report number / APN pair in the CSV does not match with
                         # any of the report number / APN's in working_fc,
                         # we don't want to
                         # delete all of the features from that report.  We will
                         # instead nullify the first feature and delete the
                         # subsequent features as if the report wasn't in the CSV
                         # at all.
-                        print '\n*** WARNING This report was in the CSV, but it has an APN pair that is not consistent with its location ***'
+                        print '\n*** WARNING This report was in the CSV, but the CSVs APN ({}) is not consistent with its location ***'.format(apns_csv[csv_index])
                         print '*** Please double check the APN in the CSV that it exists and that the location of the report overlaps that APN ***\n'
                         report_in_csv = False
 
@@ -683,7 +684,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
                 # specified in the CSV, and will input 'Delete' into the field
                 # [APN_8] for all records not in the CSV file
                 if report_in_csv == True:
-                    print '    Keeping the feature with the correct APN, and deleting the rest:'
+                    print '    Keeping the feature(s) with the APN(s) in the CSV, and deleting the rest:'
 
                     # Loop through the features in the working_fc and keep the
                     # feature or features specified in the CSV, and mark the
@@ -691,14 +692,24 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
                     where_clause ="ReportNumber = '{}'".format(report_number)
                     with arcpy.da.UpdateCursor(working_fc, ['APN', 'APN_8', 'ReportNumber'], where_clause) as working_cursor:
                         for working_row in working_cursor:
-                            apn = working_row[0]
-                            if apn == apns_csv[csv_index]:
-                                print '      Report: {}, with APN: {}, will be kept with all APN info.'.format(report_number, apn)
-##                            elif apn in apns_csv:
-##                                # Get index of that APN in the CSV
-##                                apn_index = apns_csv.index
-                            else:
-                                print '      Report: {}, with APN: {}, will be deleted.'.format(report_number, apn)
+                            apn_in_working_fc = working_row[0]
+                            keep_feature = False  # Changed to 'True' if we find a Report Number / APN pair in the CSV
+
+                            # Get a list of all the indexes in the CSV that have this report_number
+                            csv_report_index = [i for i, value in enumerate(r_numbers_csv) if value == report_number]
+                            ##print csv_report_index
+                            for index in csv_report_index:
+
+                                # For each time the Report Number is found in the CSV get the APN in the CSV and compare to the APN in the working_fc
+                                # If there is a match, change keep_feature to 'True' and break out of the above 'for' loop
+                                if apn_in_working_fc == apns_csv[index]:
+                                    print '      Report: {}, with APN: {}, will be kept with all APN info.'.format(report_number, apn_in_working_fc)
+                                    keep_feature = True
+                                    break
+
+                            # Will not keep this report if the APN from this report has no Report Number / APN pair from the CSV
+                            if keep_feature == False:
+                                print '      Report: {}, with APN: {}, will be deleted.'.format(report_number, apn_in_working_fc)
                                 working_row[1] = 'Delete'
                                 working_cursor.updateRow(working_row)
 
@@ -711,8 +722,9 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
                 if report_in_csv == False:
                     print '    Keeping the first feature, nullifying its APN info, then deleting all subsequent features:'
 
-                    # Get APN's of selected parcels from the parcels_fc's layer (par_lyr)
                     first_parcel = True  # Changed to 'False' after first report in parcel_cursor is processed
+
+                    # Get APN's of selected parcels from the parcels_fc's layer (par_lyr)
                     with arcpy.da.SearchCursor('par_lyr', ['APN', 'APN_8']) as parcel_cursor:
 
                         for parcel_row in parcel_cursor:
@@ -724,9 +736,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
                             with arcpy.da.UpdateCursor(working_fc, ['APN', 'APN_8', 'ReportNumber'], where_clause) as working_cursor:
                                 for working_row in working_cursor:
 
-                                    # Keep the first feature, and add the where_clause to a
-                                    # list that will be used to nullify the APN fields
-                                    # that came from the parcels_fc
+                                    # Keep the first feature, but input 'Nullify' into [APN_8]
                                     # (Since we don't know which APN info is correct)
                                     if first_parcel == True:
                                         print '      Report: {}, with APN: {}, will be kept.  But all APN info will be nullified.'.format(report_number, apn)
@@ -734,11 +744,10 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
                                         working_cursor.updateRow(working_row)
 
                                         # Change the flag to false so that we delete the
-                                        # stacked parcel reports
+                                        # subsequent stacked parcel reports
                                         first_parcel = False
 
-                                    # Add the subsequent features where_clause to a list
-                                    # that will be used to delete these features at one time
+                                    # Input 'Delete' into [APN_8]
                                     elif first_parcel == False:
                                         print '      Report: {}, with APN: {}, will be deleted.'.format(report_number, apn)
                                         working_row[1] = 'Delete'
@@ -750,6 +759,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
 
     del orig_cursor, orig_row
     print '  ----------------------------------------------------'
+
     #---------------------------------------------------------------------------
     #---------------------------------------------------------------------------
 
@@ -1129,7 +1139,7 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                          Function QA/QC Data
-def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append):
+def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract, match_Report_to_APN_csv):
     """
     PARAMETERS:
 
@@ -1168,9 +1178,68 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append):
     print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
 
     #---------------------------------------------------------------------------
-    #      1) Check to see if there are any duplicates in [ReportNumber]
+    #      1) Check to see if any features are not on a parcel
     print '\n------------------------------------------------------------------'
-    print '1) Checking for features with duplicate Report Numbers...'
+    print '1) Checking for features that are not a parcel...'
+
+    # Select features that do not intersect the parcel_extract
+    arcpy.MakeFeatureLayer_management(orig_fc, 'orig_fc_lyr')
+    arcpy.SelectLayerByLocation_management('orig_fc_lyr', 'INTERSECT', parcels_extract, '', 'NEW_SELECTION', 'INVERT')
+
+    not_on_parcel_ls = []
+    with arcpy.da.SearchCursor('orig_fc_lyr', ['ReportNumber']) as cursor:
+        for row in cursor:
+            not_on_parcel_ls.append(row[0])
+
+    # Report findings
+    if (len(not_on_parcel_ls) > 0):
+        print '  WARNING! There were "{}" features not on a parcel'.format(len(not_on_parcel_ls))
+        print '  Report Number:'
+        for report_number in not_on_parcel_ls:
+            print '    {}'.format(report_number)
+        print '\n  ANY DAMAGE ASSESSMENT STAFF, to fix please log onto AGOL Web Map'
+        print '  and move the features with the above Report Numbers to the correct parcel.'
+    else:
+        print '  OK! There were no features not on a parcel.'
+
+    arcpy.Delete_management('orig_fc_lyr')
+    del cursor, row
+    #---------------------------------------------------------------------------
+    #      2) Check to see if any features are on a parcel but have no APN info
+    print '\n------------------------------------------------------------------'
+    print '2) Checking for features that are on a parcel but have no APN info...'
+
+    # Select features that have are NULL for [APN] and intersect parcel_extract
+    where_clause = "APN IS NULL"
+    arcpy.MakeFeatureLayer_management(working_fc, 'working_fc_lyr', where_clause)
+    arcpy.SelectLayerByLocation_management('working_fc_lyr', 'INTERSECT', parcels_extract)
+
+    no_apn_info_ls = []
+
+    with arcpy.da.SearchCursor('working_fc_lyr', ['ReportNumber']) as cursor:
+        for row in cursor:
+            no_apn_info_ls.append(row[0])
+
+    # Report findings
+    if (len(no_apn_info_ls) > 0):
+        print '  WARNING! There were "{}" Reports on a parcel but have no APN info'.format(len(no_apn_info_ls))
+        print '  Report Number:'
+        for report_number in no_apn_info_ls:
+            print '    {}'.format(report_number)
+        print '\n  This usually happens if the report is on a stacked parcel and'
+        print '  there is no info as to which APN the report should be associated with.'
+        print '\n  ANY DAMAGE ASSESSMENT STAFF, to fix please use CSV located at:\n    {}'.format(match_Report_to_APN_csv)
+        print '  To add the above reports and APNs you wish associated to each other.'
+    else:
+        print '  OK! There were no features on a parcel w/o APN info.'
+
+    arcpy.Delete_management('working_fc_lyr')
+    del cursor, row
+
+    #---------------------------------------------------------------------------
+    #      3) Check to see if there are any duplicates in [ReportNumber]
+    print '\n------------------------------------------------------------------'
+    print '3) Checking for features with duplicate Report Numbers...'
     print '  At: {}\n'.format(orig_fc)
     orig_list = []
     dup_list  = []
@@ -1203,9 +1272,9 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append):
         print '  OK! There were no duplicate Report Numbers.'
 
     #---------------------------------------------------------------------------
-    #      2) Check to see if any features have NULL in the field [ReportNumber]
+    #      4) Check to see if any features have NULL in the field [ReportNumber]
     print '\n------------------------------------------------------------------'
-    print '2) Checking for features with no Report Number...'
+    print '4) Checking for features with no Report Number...'
 
     # Select features that do not have a Report Number
     where_clause = "ReportNumber IS NULL or ReportNumber = '' "
@@ -1226,9 +1295,9 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append):
         print '  OK! There were no features without a Report Number.'
 
     #---------------------------------------------------------------------------
-    #      3) Check to see if any features have NULL in [IncidentName]
+    #      5) Check to see if any features have NULL in [IncidentName]
     print '\n------------------------------------------------------------------'
-    print '3) Checking for features with no Incident Name...'
+    print '5) Checking for features with no Incident Name...'
 
     # Select features that do not have an Incident Name
     where_clause = "IncidentName IS NULL or IncidentName = '' "
@@ -1240,36 +1309,14 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append):
 
     # Report findings
     if num_selected > 0:
-        print '  WARNING! There were "{}" features without an Incident Name at the time the data was downloaded.'.format(num_selected)
+        print '  INFO: There were "{}" features without an Incident Name at the time the data was downloaded.'.format(num_selected)
         print '  It is expected that LUEG-GIS staff will fill out the Incident Name as needed.'
         print '\n  LUEG-GIS, please log onto AGOL and fill out an Incident Name for these features.'
+        print '  If there are more than one current incident, this should be done now.'
+        print '  If there is only one current incident, this can be done when convenient,'
+
     else:
         print '  OK! There were no features without an Incident Name.'
-
-    #---------------------------------------------------------------------------
-    #      4) Check to see if any features have NULL in [APN]
-    print '\n------------------------------------------------------------------'
-    print '4) Checking for features with no APN...'
-
-    # Select features that do not have a Report Number
-    where_clause = "APN IS NULL or APN = '' "
-    print '  At: {}\n  Where: {}\n'.format(working_fc, where_clause)
-    no_apns = []
-    with arcpy.da.SearchCursor(working_fc, ['ReportNumber', 'APN'], where_clause) as cursor:
-        for row in cursor:
-            no_apns.append(row[0])
-
-    # Report findings
-    if (len(no_apns) > 0):
-        print '  WARNING! There were {} features without an APN at the time the data was downloaded.'.format(len(no_apns))
-        print '  Report Number:'
-        for no_apn in no_apns:
-            print '    {}'.format(no_apn)
-        print '\n  This usually happens if the feature\'s location is not on a parcel.'
-        print '  Any Damage Assessment Staff, please log onto AGOL Web Map'
-        print '  and move the features with the above Report Numbers to the correct parcel.'
-    else:
-        print '  OK! There were no features without a Report Number.'
 
     #---------------------------------------------------------------------------
     # Make a footer for the new QA/QC log file
