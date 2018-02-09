@@ -63,8 +63,8 @@ def main():
     processing_FGDB_name  = 'DA_Fire_Processing.gdb'
     processing_FGDB_path  = '{}\{}'.format(wkg_folder, processing_FGDB_name)
 
-    AGOL_Data_DL_tbl_name = 'AGOL_Data_Last_Downloaded'
-    AGOL_Data_DL_tbl_path = '{}\{}'.format(processing_FGDB_path, AGOL_Data_DL_tbl_name)
+    AGOL_Data_DL_name = 'AGOL_Data_Last_Downloaded'
+    AGOL_Data_DL_path = '{}\{}'.format(processing_FGDB_path, AGOL_Data_DL_name)
 
     parcels_extract_name  = config.get('Process_Info', 'Parcels_Extract')
     parcels_extract_path  = '{}\{}'.format(processing_FGDB_path, parcels_extract_name)
@@ -143,7 +143,7 @@ def main():
     #---------------------------------------------------------------------------
     # Set the date that the data was most recently downloaded
     print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL_tbl_path)
+    Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL_path)
 
     #---------------------------------------------------------------------------
     # Get an extract of all parcels that overlap with the DA Reports
@@ -467,7 +467,7 @@ def Get_Newest_Downloaded_Data(raw_agol_FGDB_path):
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #            FUNCTION: Set Date the AGOL DA Reports were Downloaded
-def Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL_tbl):
+def Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL):
     """
     PARAMETERS:
 
@@ -490,15 +490,15 @@ def Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL_tbl):
     # Format time back into a string (i.e. "02 February, 2018 - 11:11:33 AM"
     AGOL_data_downloaded = time.strftime("%d %B, %Y - %I:%M:%S %p", time.localtime(t_formatted))
 
-    # Field Calculate the string into the AGOL_Data_DL_tbl
-    table = AGOL_Data_DL_tbl
+    # Field Calculate the string into the AGOL_Data_DL FC
+    fc = AGOL_Data_DL
     field = 'AGOL_Data_Last_Downloaded'
     expression = '"{}"'.format(AGOL_data_downloaded)
 
-    print '  Calculating field:\n    {}\n  In table:\n    {} '.format(field, table)
+    print '  Calculating field:\n    {}\n  In fc:\n    {} '.format(field, fc)
     print '  To equal:\n    {}'.format(expression)
 
-    arcpy.CalculateField_management(table, field, expression)
+    arcpy.CalculateField_management(fc, field, expression)
 
     print 'Finished Set_Date_DA_Reports_DL()\n'
     return
