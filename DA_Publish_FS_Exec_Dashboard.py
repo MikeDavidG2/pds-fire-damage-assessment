@@ -27,11 +27,115 @@ import shutil
 #-------------------------------------------------------------------------------
 #                             Set Variables <MG 02/12/2018>
 #-------------------------------------------------------------------------------
-# Name of ini file located in the same location as this script.
-ini_file = r"P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\Publish_DA_Exec_Dashboard_FS.ini"
 
+# Name of this script
+name_of_script = 'DA_Publish_FS_Exec_Dashboard.py'
+
+# Name of ini file located in the same location as this script.
+cfgFile = r"P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Publish_FS_Exec_Dashboard.ini"
+
+if os.path.isfile(cfgFile):
+    config = ConfigParser.ConfigParser()
+    config.read(cfgFile)
+else:
+    print("INI file not found. \nMake sure a valid '.ini' file exists at {}.".format(cfgFile))
+    sys.exit()
+
+# Log file is a concatenation of the config file path to the log folder and the name of the script (w/o the .py)
+log_file = '{}\{}'.format(config.get('Log_File', 'Log_File_Folder'), name_of_script.split('.')[0])
+
+# Permissions
 permissions_to_set = "Query"  # <Full permissions = "Query,Create,Update,Delete,Uploads,Editing,Sync">
+
 #-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                           MG's Functions Below
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                          FUNCTION Write_Print_To_Log()
+def Write_Print_To_Log(log_file):
+    """
+    PARAMETERS:
+      log_file (str): Path to log file.  The part after the last "\" will be the
+        name of the .log file after the date, time, and ".log" is appended to it.
+
+    RETURNS:
+      orig_stdout (os object): The original stdout is saved in this variable so
+        that the script can access it and return stdout back to its orig settings.
+
+    FUNCTION:
+      To turn all the 'print' statements into a log-writing object.  A new log
+        file will be created based on log_file with the date, time, ".log"
+        appended to it.  And any print statements after the command
+        "sys.stdout = write_to_log" will be written to this log.
+      It is a good idea to use the returned orig_stdout variable to return sys.stdout
+        back to its original setting.
+      NOTE: This function needs the function Get_DT_To_Append() to run
+
+    """
+    print 'Starting Write_Print_To_Log()...'
+
+    # Get the original sys.stdout so it can be returned to normal at the
+    #    end of the script.
+    orig_stdout = sys.stdout
+
+    # Get DateTime to append
+    dt_to_append = Get_DT_To_Append()
+
+    # Create the log file with the datetime appended to the file name
+    log_file_date = '{}_{}.log'.format(log_file,dt_to_append)
+    write_to_log = open(log_file_date, 'w')
+
+    # Make the 'print' statement write to the log file
+    print '  Setting "print" command to write to a log file found at:\n  {}'.format(log_file_date)
+    sys.stdout = write_to_log
+
+    # Header for log file
+    start_time = datetime.datetime.now()
+    start_time_str = [start_time.strftime('%m/%d/%Y  %I:%M:%S %p')][0]
+    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+    print '                  {}'.format(start_time_str)
+    print '             START <name_of_script_here>.py'
+    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n'
+
+
+    return orig_stdout
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                          FUNCTION Get_dt_to_append
+def Get_DT_To_Append():
+    """
+    PARAMETERS:
+      none
+
+    RETURNS:
+      dt_to_append (str): Which is in the format 'YYYY_MM_DD__HH_MM_SS'
+
+    FUNCTION:
+      To get a formatted datetime string that can be used to append to files
+      to keep them unique.
+    """
+    print 'Starting Get_DT_To_Append()...'
+
+    start_time = datetime.datetime.now()
+
+    date = start_time.strftime('%Y_%m_%d')
+    time = start_time.strftime('%H_%M_%S')
+
+    dt_to_append = '%s__%s' % (date, time)
+
+    print '  DateTime to append: {}'.format(dt_to_append)
+
+    print 'Finished Get_DT_To_Append()\n'
+    return dt_to_append
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                           MG's Functions Above
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+
 class AGOLHandler(object):
 
     def __init__(self, username, password, serviceName, folderName, proxyDict):
@@ -483,10 +587,13 @@ if __name__ == "__main__":
 
     print("Starting Feature Service publish process")
 
+    # Turn all 'print' statements into a log-writing object
+    Write_Print_To_Log(log_file)
+
     # Find and gather settings from the ini file
     localPath = sys.path[0]
-    ##settingsFile = os.path.join(localPath, name_of_ini_file) <MG 20180212: Commented out t oallow for full path to .ini>
-    settingsFile = ini_file  # <MG 20180212: Variable set at top of script>
+    ##settingsFile = os.path.join(localPath, name_of_cfgFile) <MG 20180212: Commented out t oallow for full path to .ini>
+    settingsFile = cfgFile  # <MG 20180212: Variable set at top of script>
 
     if os.path.isfile(settingsFile):
         print("Using INI file found at: {}.".format(settingsFile))
@@ -553,4 +660,10 @@ if __name__ == "__main__":
         print '\nDeleting tempDir...'
         shutil.rmtree(tempDir)
         print("\nFinished.")
+
+    # End of script reporting
+    print 'End of script'
+    sys.stdout = orig_stdout
+    print 'End of script'
+
     raw_input('Press "ENTER" to continue...')

@@ -39,12 +39,20 @@ def main():
         path_prefix = 'P:'  # i.e. 'P:' or 'U:'
 
     # Name of this script
-    name_of_script = 'Process_DA_Fire_Data.py'
+    name_of_script = 'DA_Process_Fire_Data.py'
+
+    # Set the Email variables
+    ##email_admin_ls = ['michael.grue@sdcounty.ca.gov', 'randy.yakos@sdcounty.ca.gov', 'gary.ross@sdcounty.ca.gov']
+    email_admin_ls = ['michael.grue@sdcounty.ca.gov']
+
+    #---------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
+    #                   Use cfgFile to set the below variables
 
     # Full path to a text file that has the username and password of an account
     #  that has access to at least VIEW the FS in AGOL, as well as an email
     #  account that has access to send emails.
-    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\config_file.ini".format(path_prefix)
+    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Download_and_Process.ini".format(path_prefix)
     if os.path.isfile(cfgFile):
         config = ConfigParser.ConfigParser()
         config.read(cfgFile)
@@ -53,11 +61,9 @@ def main():
         sys.exit()
 
     # Set the working folder, FGDBs, FCs, and Tables
-    # TODO: some of these 'Process_Info' can be changed to 'Download Info'
-    # TODO: CLEAN up these paths, it is too complicated.
     wkg_folder            = config.get('Download_Info', 'wkg_folder')
 
-    raw_agol_FGDB_name    = config.get('Download_Info', 'FGDB_names')
+    raw_agol_FGDB_name    = config.get('Download_Info', 'FGDB_name')
     raw_agol_FGDB_path    = '{}\{}'.format(wkg_folder, raw_agol_FGDB_name)
 
     processing_FGDB_name  = 'DA_Fire_Processing.gdb'
@@ -94,12 +100,8 @@ def main():
 
 
     # Set the Survey123 Feature Service variables
-    name_of_FS           = config.get('Download_Info', 'FS_names')
-    index_of_layer_in_FS = config.get('Download_Info', 'FS_indexes')
-
-    # Set the Email variables
-    ##email_admin_ls = ['michael.grue@sdcounty.ca.gov', 'randy.yakos@sdcounty.ca.gov', 'gary.ross@sdcounty.ca.gov']
-    email_admin_ls = ['michael.grue@sdcounty.ca.gov']
+    name_of_FS           = config.get('Download_Info', 'FS_name')
+    index_of_layer_in_FS = config.get('Download_Info', 'FS_index')
 
     #---------------------------------------------------------------------------
     #                Set Variables that will probably not change
@@ -118,17 +120,17 @@ def main():
             orig_stdout, log_file_date, dt_to_append = Write_Print_To_Log(log_file, name_of_script)
         except Exception as e:
             success = False
-            print '*** ERROR with Write_Print_To_Log() ***'
+            print '\n*** ERROR with Write_Print_To_Log() ***'
             print str(e)
 
-##    # Get a token with permissions to view the AGOL data
-##    if success == True:
-##        try:
-##            token = Get_Token(cfgFile)
-##        except Exception as e:
-##            success = False
-##            print '*** ERROR with Get_Token() ***'
-##            print str(e)
+    # Get a token with permissions to view the AGOL data
+    if success == True:
+        try:
+            token = Get_Token(cfgFile)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Get_Token() ***'
+            print str(e)
 
 
     #---------------------------------------------------------------------------
@@ -137,102 +139,139 @@ def main():
     #                 Non-standard Template Functions go HERE
 
     # Get the path to the most recently downloaded data
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    orig_DA_reports_fc = Get_Newest_Downloaded_Data(raw_agol_FGDB_path)
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            orig_DA_reports_fc = Get_Newest_Downloaded_Data(raw_agol_FGDB_path)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Get_Newest_Downloaded_Data() ***'
+            print str(e)
 
     #---------------------------------------------------------------------------
     # Set the date that the data was most recently downloaded
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL_path)
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL_path)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Set_Date_DA_Reports_DL() ***'
+            print str(e)
 
     #---------------------------------------------------------------------------
     # Get an extract of all parcels that overlap with the DA Reports
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    Extract_Parcels(parcels_all, orig_DA_reports_fc, parcels_extract_path)
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            Extract_Parcels(parcels_all, orig_DA_reports_fc, parcels_extract_path)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Extract_Parcels() ***'
+            print str(e)
 
     #---------------------------------------------------------------------------
     # Spatially Join the DA Reports with the parcels_extract_path
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    working_fc = Join_DA_Reports_w_Parcels(orig_DA_reports_fc, processing_FGDB_path, parcels_extract_path)
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            working_fc = Join_DA_Reports_w_Parcels(orig_DA_reports_fc, processing_FGDB_path, parcels_extract_path)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Join_DA_Reports_w_Parcels() ***'
+            print str(e)
 
     #---------------------------------------------------------------------------
     # Handle data on a stacked parcel.
     # Stacked parcels are multiple APN's on one parcel footprint
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    Handle_Stacked_Parcels(orig_DA_reports_fc, working_fc, parcels_extract_path, match_Report_to_APN_csv)
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+##            Handle_Stacked_Parcels(orig_DA_reports_fc, working_fc, parcels_extract_path, match_Report_to_APN_csv)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Handle_Stacked_Parcels() ***'
+            print str(e)
 
     #---------------------------------------------------------------------------
     # Add Fields to downloaded DA Fire Data
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    Fields_Add_Fields(working_fc, add_fields_csv)
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            Fields_Add_Fields(working_fc, add_fields_csv)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Fields_Add_Fields() ***'
+            print str(e)
 
     #---------------------------------------------------------------------------
     # Calculate Fields
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    Fields_Calculate_Fields(working_fc, calc_fields_csv)
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            Fields_Calculate_Fields(working_fc, calc_fields_csv)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Fields_Calculate_Fields() ***'
+            print str(e)
 
     #---------------------------------------------------------------------------
     # QA/QC the data
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    QA_QC_Data(orig_DA_reports_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract_path, match_Report_to_APN_csv)
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            QA_QC_Data(orig_DA_reports_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract_path, match_Report_to_APN_csv)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with QA_QC_Data() ***'
+            print str(e)
 
     #---------------------------------------------------------------------------
     # Backup the production FC before attempting to edit it
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    Backup_FC(prod_FC_path)
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            Backup_FC(prod_FC_path)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Backup_FC() ***'
+            print str(e)
 
     #---------------------------------------------------------------------------
-    #         Append newly processed data into the production database
+    #                       Append newly processed data
+    #                      into the production database
     # Delete the features in the prod database
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    Delete_Features(prod_FC_path)
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            Delete_Features(prod_FC_path)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Delete_Features() ***'
+            print str(e)
 
     # Append the features from the working database to the prod database
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    Append_Data(working_fc, prod_FC_path)
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            Append_Data(working_fc, prod_FC_path)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Append_Data() ***'
+            print str(e)
 
-##    #---------------------------------------------------------------------------
-##    #                           Update AGOL fields
-##    #---------------------------------------------------------------------------
-##    #TODO: put the below into its own function
-##    #               Update (in AGOL) NULL [Quantity] to equal 1
-##    print '\nUpdating (in AGOL) any records with a NULL [Quantity] to equal 1'
-##
-##    # Get list of Object IDs
-##    where_clause = "Quantity IS NULL"
-##    obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
-##
-##    # Update those Object IDs to have 1 in their [Quantity] field
-##    field_to_update = 'Quantity'
-##    new_value       = 1
-##    for object_id in obj_ids:
-##
-##        AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
-##
-##
-##    #           Update (in AGOL) NULL [EstimatedReplacementCost]
-##    #                to equal (in working database) [EstimatedReplacementCost]
-##    # Make a cursor that only looks at reports with an Estimated Replacement Cost
-##    print '\nUpdating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
-##    fields = ['EstimatedReplacementCost', 'ReportNumber']
-##    cur_where_clause = "EstimatedReplacementCost IS NOT NULL"
-##    print '  Cursor Where Clause: "{}"'.format(cur_where_clause)
-##    with arcpy.da.SearchCursor(working_fc, fields, cur_where_clause) as cursor:
-##        for row in cursor:
-##            est_replcmt_cost = row[0]
-##            report_number    = row[1]
-##
-##            # Get the object id of the AGOL feature with that report number
-##            where_clause = "ReportNumber = {}".format(report_number)
-##            obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
-##
-##            # Update the AGOL feature with that report number with the Estimated Replacement Cost
-##            if (len(obj_ids) == 1):  # There should only be one object id with that report number
-##                field_to_update = 'EstimatedReplacementCost'
-##                new_value = est_replcmt_cost
-##
-##                for object_id in obj_ids:
-##                    AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
+    #---------------------------------------------------------------------------
+    #                           Update AGOL fields
+    #---------------------------------------------------------------------------
+    # Update AGOL fields
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Update_AGOL_Fields() ***'
+            print str(e)
 
     #---------------------------------------------------------------------------
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -270,7 +309,8 @@ def main():
         print 'Please find log file at:\n  {}\n'.format(log_file_date)
 
     if called_by == 'MANUAL':
-        raw_input('Press ENTER to continue')
+        ##raw_input('Press ENTER to continue')
+        pass
 
 #-------------------------------------------------------------------------------
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -458,7 +498,7 @@ def Get_Newest_Downloaded_Data(raw_agol_FGDB_path):
 
     # Set the path of the newest downloaded data
     newest_download_path = '{}\{}'.format(raw_agol_FGDB_path, newest_download)
-    print 'The newest download is at:\n  {}\n'.format(newest_download_path)
+    print 'The newest download is at:\n  {}'.format(newest_download_path)
 
     print 'Finished Get_Newest_Downloaded_Data()\n'
 
@@ -488,7 +528,7 @@ def Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL):
     t_formatted = time.mktime(t)
 
     # Format time back into a string (i.e. "02 February, 2018 - 11:11:33 AM"
-    AGOL_data_downloaded = time.strftime("%d %B, %Y - %I:%M:%S %p", time.localtime(t_formatted))
+    AGOL_data_downloaded = time.strftime("%d %b, %Y - %I:%M:%S %p", time.localtime(t_formatted))
 
     # Field Calculate the string into the AGOL_Data_DL FC
     fc = AGOL_Data_DL
@@ -529,7 +569,7 @@ def Extract_Parcels(parcels_all, orig_fc, parcels_int_orig_fc):
 
     # Export selected parcels
     if (count != 0):
-        print '  Deleting the existing features at: {}'.format(parcels_int_orig_fc)
+        print '  Deleting the old existing parcels at: {}'.format(parcels_int_orig_fc)
 
         # Delete the existing features
         arcpy.DeleteFeatures_management(parcels_int_orig_fc)
@@ -561,7 +601,7 @@ def Join_DA_Reports_w_Parcels(newest_download_path, processing_FGDB_path, parcel
     working_fc       = '{}\{}_joined'.format(processing_FGDB_path, os.path.basename(newest_download_path))
     join_operation   = 'JOIN_ONE_TO_MANY'
 
-    print '  Spatially Joining:\n    {}\n  With:\n    {}\n  Joined FC at:\n    {}\n'.format(target_features, join_features, working_fc)
+    print '  Spatially Joining:\n    {}\n  With:\n    {}\n  Joined FC at:\n    {}'.format(target_features, join_features, working_fc)
     arcpy.SpatialJoin_analysis(target_features, join_features, working_fc, join_operation)
 
     print 'Finished Join_DA_Reports_w_Parcels()\n'
@@ -1432,13 +1472,49 @@ def Backup_FC(full_path_to_fc):
     in_features = full_path_to_fc
     out_path    = os.path.dirname(full_path_to_fc)
     out_name    = '{}_BAK'.format(os.path.basename(full_path_to_fc))
+    out_full_path = '{}\{}'.format(out_path, out_name)
 
-    print '  Backing up FC: {}'.format(in_features)
-    print '             To: {}\{}'.format(out_path, out_name)
+    no_schema_lock = Test_Schema_Lock(out_full_path)
 
-    arcpy.FeatureClassToFeatureClass_conversion (in_features, out_path, out_name)
+    if no_schema_lock == True:
+        print '  Backing up FC: {}'.format(in_features)
+        print '             To: {}'.format(out_full_path)
+
+        arcpy.FeatureClassToFeatureClass_conversion (in_features, out_path, out_name)
+
+    else:
+        print '*** WARNING, There was a schema lock on:\n      {}'.format(out_full_path)
+        print '  A backup was not created of the current dataset.\n  The script is continuing to run.'
+        print '  Recommend creating a manual backup of the data at:\n    {}\n'.format(in_features)
 
     print 'Finished Backup_FC()\n'
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                          FUNCTION Test_Schema_Lock()
+def Test_Schema_Lock(dataset):
+    """
+    PARAMETERS:
+      dataset (str): Full path to a dataset to be tested if there is a schema lock
+
+    RETURNS:
+      no_schema_lock (Boolean): "True" or "False" if there is no schema lock
+
+    FUNCTION:
+      To perform a test on a dataset and return "True" if there is no schema
+      lock, and "False" if a schema lock already exists.
+    """
+
+    print 'Starting Test_Schema_Lock()...'
+
+    print '  Testing dataset: {}'.format(dataset)
+
+    no_schema_lock = arcpy.TestSchemaLock(dataset)
+    print '  Dataset available to have a schema lock applied to it = "{}"'.format(no_schema_lock)
+
+    print 'Finished Test_Schema_Lock()\n'
+
+    return no_schema_lock
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -1502,6 +1578,65 @@ def Append_Data(input_item, target, schema_type='NO_TEST', field_mapping=None):
 
     print 'Finished Append_Data()\n'
 
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                FUNCTION:
+def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
+    """
+    PARAMETERS:
+
+
+    RETURNS:
+
+
+    FUNCTION:
+      .
+    """
+
+    print '--------------------------------------------------------------------'
+    print 'Starting Update_AGOL_Fields()...'
+
+    #---------------------------------------------------------------------------
+    #               Update (in AGOL) NULL [Quantity] to equal 1
+    print '\nUpdating (in AGOL) any records with a NULL [Quantity] to equal 1'
+
+    # Get list of Object IDs
+    where_clause = "Quantity IS NULL"
+    obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
+
+    # Update those Object IDs to have 1 in their [Quantity] field
+    field_to_update = 'Quantity'
+    new_value       = 1
+    for object_id in obj_ids:
+
+        AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
+
+    #---------------------------------------------------------------------------
+    #           Update (in AGOL) NULL [EstimatedReplacementCost]
+    #                to equal (in working database) [EstimatedReplacementCost]
+    # Make a cursor that only looks at reports with an Estimated Replacement Cost
+    print '\nUpdating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
+    fields = ['EstimatedReplacementCost', 'ReportNumber']
+    cur_where_clause = "EstimatedReplacementCost IS NOT NULL"
+    print '  Cursor Where Clause: "{}"'.format(cur_where_clause)
+    with arcpy.da.SearchCursor(working_fc, fields, cur_where_clause) as cursor:
+        for row in cursor:
+            est_replcmt_cost = row[0]
+            report_number    = row[1]
+
+            # Get the object id of the AGOL feature with that report number
+            where_clause = "ReportNumber = {}".format(report_number)
+            obj_ids = AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, token)
+
+            # Update the AGOL feature with that report number with the Estimated Replacement Cost
+            if (len(obj_ids) == 1):  # There should only be one object id with that report number
+                field_to_update = 'EstimatedReplacementCost'
+                new_value = est_replcmt_cost
+
+                for object_id in obj_ids:
+                    AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
+
+    print 'Finished Append_Data()\n'
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                FUNCTION:    Get AGOL Object IDs Where

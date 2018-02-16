@@ -11,14 +11,12 @@ The users set many of the variables in a config file:
        the data (used to get the token).
     2) Username and Password of a google account that can be used to send an
        email.
-    3) Name(s) of the Feature Service(s) to download
-    4) Feature Service index(s)
-    5) FGDB name(s)
-    6) FC name(s)
+    3) Name of the Feature Service to download
+    4) Feature Service index
+    5) FGDB name
+    6) FC name
 
     Format for config file:
-    The comma and one space (", ") is important in the config file in order to
-    create a list from the single string.
 
         [AGOL]
         usr: lueggis
@@ -29,21 +27,17 @@ The users set many of the variables in a config file:
         pwd: xxxxx
 
         [Download_Info]
-        # The below lists must be in the same order that you want to process them.
-        # For example the first FS name, FS index, and FC name will all be processed at the same time
-        # IMPORTANT: separate the items in the list with ONE comma and ONE space.
-
-        # Feature Service Names
-        FS_names   = <first_value>, <second_value>, <etc.>
+        # Feature Service Name
+        FS_name   =
 
         # Index of the layer in the Feature Service on AGOL that you want to download
-        FS_indexes = <first integer>, <second integer>, <etc.>
+        FS_index =
 
         # Name of the EXISTING FGDB that should hold the layer from AGOL being downloaded
-        FGDB_names = <first value>.gdb, <second value>.gdb, <etc.>
+        FGDB_name =
 
         # Name you want to give the Feature Class in the FGDB for the downloaded data
-        FC_names   = <first_value>, <second_value>, <etc.>
+        FC_name   =
 
 Users set some variables in this script:
   Name of this script
@@ -69,7 +63,7 @@ def main():
     #                     Set Variables that will change
 
     # Name of this script
-    name_of_script = 'Download_DA_Fire_Data.py'
+    name_of_script = 'DA_Download_Fire_Data.py'
 
     # If this script is being called by a batch file that is a schedule task
     # that batch file can pass a parameter "SCHEDULED" to this script.  This will
@@ -95,7 +89,7 @@ def main():
     # Full path to a text file that has the username and password of an account
     #  that has access to at least VIEW the FS in AGOL, as well as an email
     #  account that has access to send emails.
-    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\config_file.ini".format(path_prefix)
+    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Download_and_Process.ini".format(path_prefix)
     if os.path.isfile(cfgFile):
         config = ConfigParser.ConfigParser()
         config.read(cfgFile)
@@ -105,21 +99,18 @@ def main():
 
     # FS_name is the name of the Feature Service (FS) with the layer you want
     #  to download (d/l).  For example: "Homeless_Activity_Sites"
-    FS_names        = config.get('Download_Info', 'FS_names')
-    FS_names_ls = FS_names.split(', ')  # Get list of FS to download
+    FS_name        = config.get('Download_Info', 'FS_name')
 
     # Index of the layer in the FS you want to d/l.  Frequently 0.
-    index_of_layers = config.get('Download_Info', 'FS_indexes')
-    index_of_layers_ls = index_of_layers.split(', ')  # Get list of indexes to download
+    index_of_layer = config.get('Download_Info', 'FS_index')
 
     # Set working folder that holds the FGDBs, the name of the FGDBs and the FC names.
     wkg_folder     = config.get('Download_Info', 'wkg_folder')
 
-    FGDB_names     = config.get('Download_Info', 'FGDB_names')
-    FGDB_names_ls  = FGDB_names.split(', ')  # Get list of names of the existing FGDB's to put the new data into
+    # Get list of name of the existing FGDB to put the new data into
+    FGDB_name     = config.get('Download_Info', 'FGDB_name')
 
-    FC_names       = config.get('Download_Info', 'FC_names')
-    FC_names_ls    = FC_names.split(', ')  # Get list of names for the FC's to be created
+    FC_name       = config.get('Download_Info', 'FC_name')
 
 
     # Set the log file variables
@@ -164,26 +155,25 @@ def main():
     # Download the data
     if success == True:
 
-        for count, index_of_layer in enumerate(index_of_layers_ls):  # This list has the index of every layer we want to download
+        # Set the full FS URL. "1vIhDJwtG5eNmiqX" is the CoSD portal server so it shouldn't change much.
+        FS_url  = r'https://services1.arcgis.com/1vIhDJwtG5eNmiqX/arcgis/rest/services/{}/FeatureServer'.format(FS_name)
 
-            # Set the full FS URL. "1vIhDJwtG5eNmiqX" is the CoSD portal server so it shouldn't change much.
-            FS_url  = r'https://services1.arcgis.com/1vIhDJwtG5eNmiqX/arcgis/rest/services/{}/FeatureServer'.format(FS_names_ls[count])
-
-            # Set the name of the FGDB
-            wkg_FGDB = FGDB_names_ls[count]
-
-            # Set the name of the FC we want to create in our FGDB
-            FC_name = FC_names_ls[count]
+        # Set the name of the FC we want to create in our FGDB w/ Date and Time
+        try:
             dt_to_append = Get_DT_To_Append()
             FC_name_date = FC_name + '_' + dt_to_append
+        except Exception as e:
+            print '*** ERROR with Get_DT_To_Append() ***'
+            print str(e)
 
-            try:
-                Get_AGOL_Data_All(AGOL_fields, token, FS_url, index_of_layer, wkg_folder, wkg_FGDB, FC_name_date)
+        # Download the data
+        try:
+            Get_AGOL_Data_All(AGOL_fields, token, FS_url, index_of_layer, wkg_folder, FGDB_name, FC_name_date)
 
-            except Exception as e:
-                success = False
-                print '*** ERROR with Get_AGOL_Data_All() ***'
-                print str(e)
+        except Exception as e:
+            success = False
+            print '*** ERROR with Get_AGOL_Data_All() ***'
+            print str(e)
 
     # Footer for log file
     finish_time_str = [datetime.datetime.now().strftime('%m/%d/%Y  %I:%M:%S %p')][0]
@@ -216,9 +206,6 @@ def main():
     else:
         print '\n*** ERROR with {} ***'.format(name_of_script)
         print 'Please see log file (noted above) for troubleshooting\n'
-
-    if called_by == '':
-        raw_input('Press ENTER to continue')
 
 #-------------------------------------------------------------------------------
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
