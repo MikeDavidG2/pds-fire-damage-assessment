@@ -11,14 +11,12 @@ The users set many of the variables in a config file:
        the data (used to get the token).
     2) Username and Password of a google account that can be used to send an
        email.
-    3) Name(s) of the Feature Service(s) to download
-    4) Feature Service index(s)
-    5) FGDB name(s)
-    6) FC name(s)
+    3) Name of the Feature Service to download
+    4) Feature Service index
+    5) FGDB name
+    6) FC name
 
     Format for config file:
-    The comma and one space (", ") is important in the config file in order to
-    create a list from the single string.
 
         [AGOL]
         usr: lueggis
@@ -29,21 +27,18 @@ The users set many of the variables in a config file:
         pwd: xxxxx
 
         [Download_Info]
-        # The below lists must be in the same order that you want to process them.
-        # For example the first FS name, FS index, and FC name will all be processed at the same time
-        # IMPORTANT: separate the items in the list with ONE comma and ONE space.
 
-        # Feature Service Names
-        FS_names   = <first_value>, <second_value>, <etc.>
+        # Feature Service Name
+        FS_name = 
 
         # Index of the layer in the Feature Service on AGOL that you want to download
-        FS_indexes = <first integer>, <second integer>, <etc.>
+        FS_indexe = 
 
         # Name of the EXISTING FGDB that should hold the layer from AGOL being downloaded
-        FGDB_names = <first value>.gdb, <second value>.gdb, <etc.>
+        FGDB_name = 
 
         # Name you want to give the Feature Class in the FGDB for the downloaded data
-        FC_names   = <first_value>, <second_value>, <etc.>
+        FC_name =
 
 Users set some variables in this script:
   Name of this script
