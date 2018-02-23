@@ -474,83 +474,25 @@ def Get_DT_To_Append():
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
-#                       FUNCTION:    Get AGOL token
-def Get_Token(cfgFile, gtURL="https://www.arcgis.com/sharing/rest/generateToken"):
-    """
-    PARAMETERS:
-      cfgFile (str):
-        Path to the .txt file that holds the user name and password of the
-        account used to access the data.  This account must be in a group
-        that has access to the online database.
-        The format of the config file should be as below with
-        <username> and <password> completed:
-
-          [AGOL]
-          usr: <username>
-          pwd: <password>
-
-      gtURL {str}: URL where ArcGIS generates tokens. OPTIONAL.
-
-    VARS:
-      token (str):
-        a string 'password' from ArcGIS that will allow us to to access the
-        online database.
-
-    RETURNS:
-      token (str): A long string that acts as an access code to AGOL servers.
-        Used in later functions to gain access to our data.
-
-    FUNCTION: Gets a token from AGOL that allows access to the AGOL data.
-    """
-
-    print '--------------------------------------------------------------------'
-    print "Getting Token..."
-
-    import ConfigParser, urllib, urllib2, json
-
-    # Get the user name and password from the cfgFile
-    configRMA = ConfigParser.ConfigParser()
-    configRMA.read(cfgFile)
-    usr = configRMA.get("AGOL","usr")
-    pwd = configRMA.get("AGOL","pwd")
-
-    # Create a dictionary of the user name, password, and 2 other keys
-    gtValues = {'username' : usr, 'password' : pwd, 'referer' : 'http://www.arcgis.com', 'f' : 'json' }
-
-    # Encode the dictionary so they are in URL format
-    gtData = urllib.urlencode(gtValues)
-
-    # Create a request object with the URL adn the URL formatted dictionary
-    gtRequest = urllib2.Request(gtURL,gtData)
-
-    # Store the response to the request
-    gtResponse = urllib2.urlopen(gtRequest)
-
-    # Store the response as a json object
-    gtJson = json.load(gtResponse)
-
-    # Store the token from the json object
-    token = gtJson['token']
-    ##print token  # For testing purposes
-
-    print "Successfully retrieved token.\n"
-
-    return token
-
-#-------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
 #                         FUNCTION: Get Newest Downloaded Data
 def Get_Newest_Downloaded_Data(raw_agol_FGDB_path):
     """
     PARAMETERS:
+      raw_agol_FGDB_path (str):
 
     RETURNS:
+      newest_download_path(str):
 
     FUNCTION:
       To return the path of the newest downloaded data.  This works if the FGDB
-      being searched only contains one FC and that FC is time stamped as
+      being searched only contains one FC basename and that FC is time stamped as
       'YYYY_MM_DD__HH_MM_SS'.  This means that the newest data will be the last
       FC in the list.
+
+      For example:
+        Data_From_AGOL_2018_01_01__10_00_00
+        Data_From_AGOL_2018_01_02__10_00_00
+        Data_From_AGOL_2018_01_02__10_00_01
     """
 
     print '--------------------------------------------------------------------'
@@ -580,10 +522,15 @@ def Get_Newest_Downloaded_Data(raw_agol_FGDB_path):
 def Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL):
     """
     PARAMETERS:
+      orig_DA_reports_fc (str):
+
+      AGOL_Data_DL (str):
 
     RETURNS:
+      None
 
     FUNCTION:
+
     """
     print '--------------------------------------------------------------------'
     print 'Starting Set_Date_DA_Reports_DL()'
@@ -618,10 +565,17 @@ def Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL):
 def Extract_Parcels(parcels_all, orig_fc, parcels_int_orig_fc):
     """
     PARAMETERS:
+      parcels_all (str):
+
+      orig_fc (str):
+
+      parcels_int_orig_fc (str):
 
     RETURNS:
+      None
 
     FUNCTION:
+
     """
     print '--------------------------------------------------------------------'
     print 'Starting Extract_Parcels()'
@@ -654,14 +608,21 @@ def Extract_Parcels(parcels_all, orig_fc, parcels_int_orig_fc):
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
-#                         FUNCTION: Join DA Reports with Parcels Extract
+#               FUNCTION: Join DA Reports with Parcels Extract
 def Join_DA_Reports_w_Parcels(newest_download_path, processing_FGDB_path, parcels_extract):
     """
     PARAMETERS:
+      newest_download_path (str):
+
+      processing_FGDB_path (str):
+
+      parcels_extract (str):
 
     RETURNS:
+      working_fc (str)
 
     FUNCTION:
+
     """
     print '--------------------------------------------------------------------'
     print 'Starting Join_DA_Reports_w_Parcels()'
@@ -684,10 +645,15 @@ def Join_DA_Reports_w_Parcels(newest_download_path, processing_FGDB_path, parcel
 def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN):
     """
     PARAMETERS:
+      orig_fc (str):
+      working_fc (str):
+      parcels_fc (str):
+      match_report_to_APN (str):
 
     RETURNS:
-
+      None
     FUNCTION:
+
     """
 
     print '--------------------------------------------------------------------'
@@ -1252,10 +1218,23 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
 def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract, match_Report_to_APN_csv):
     """
     PARAMETERS:
+      orig_fc (str):
+
+      working_fc (str):
+
+      QA_QC_log_folder (str):
+
+      dt_to_append (str):
+
+      parcels_extract (str):
+
+      match_Report_to_APN_csv (str):
 
     RETURNS:
+      success (bool):
 
     FUNCTION:
+
     """
 
     print '--------------------------------------------------------------------'
@@ -1672,17 +1651,84 @@ def Append_Data(input_item, target, schema_type='NO_TEST', field_mapping=None):
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
+#                       FUNCTION:    Get AGOL token
+def Get_Token(cfgFile, gtURL="https://www.arcgis.com/sharing/rest/generateToken"):
+    """
+    PARAMETERS:
+      cfgFile (str):
+        Path to the .txt file that holds the user name and password of the
+        account used to access the data.  This account must be in a group
+        that has access to the online database.
+        The format of the config file should be as below with
+        <username> and <password> completed:
+
+          [AGOL]
+          usr: <username>
+          pwd: <password>
+
+      gtURL {str}: URL where ArcGIS generates tokens. OPTIONAL.
+
+    VARS:
+      token (str):
+        a string 'password' from ArcGIS that will allow us to to access the
+        online database.
+
+    RETURNS:
+      token (str): A long string that acts as an access code to AGOL servers.
+        Used in later functions to gain access to our data.
+
+    FUNCTION: Gets a token from AGOL that allows access to the AGOL data.
+    """
+
+    print '--------------------------------------------------------------------'
+    print "Getting Token..."
+
+    import ConfigParser, urllib, urllib2, json
+
+    # Get the user name and password from the cfgFile
+    configRMA = ConfigParser.ConfigParser()
+    configRMA.read(cfgFile)
+    usr = configRMA.get("AGOL","usr")
+    pwd = configRMA.get("AGOL","pwd")
+
+    # Create a dictionary of the user name, password, and 2 other keys
+    gtValues = {'username' : usr, 'password' : pwd, 'referer' : 'http://www.arcgis.com', 'f' : 'json' }
+
+    # Encode the dictionary so they are in URL format
+    gtData = urllib.urlencode(gtValues)
+
+    # Create a request object with the URL adn the URL formatted dictionary
+    gtRequest = urllib2.Request(gtURL,gtData)
+
+    # Store the response to the request
+    gtResponse = urllib2.urlopen(gtRequest)
+
+    # Store the response as a json object
+    gtJson = json.load(gtResponse)
+
+    # Store the token from the json object
+    token = gtJson['token']
+    ##print token  # For testing purposes
+
+    print "Successfully retrieved token.\n"
+
+    return token
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 #                FUNCTION:
 def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
     """
     PARAMETERS:
-
+      name_of_FS (str):
+      index_of_layer_in_FS, token (str):
+      working_fc (str):
 
     RETURNS:
-
+      None
 
     FUNCTION:
-      .
+
     """
 
     print '--------------------------------------------------------------------'
@@ -1729,6 +1775,8 @@ def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
                     AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
 
     print 'Finished Update_AGOL_Fields()\n'
+    return
+
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                FUNCTION:    Get AGOL Object IDs Where
