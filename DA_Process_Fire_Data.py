@@ -1,7 +1,87 @@
 #-------------------------------------------------------------------------------
 # Purpose:
 """
+SHORT VERSION:
 To Process the recently downloaded Fire Damage Assessment Data.
+From accessing the raw downloaded data from another script,
+through putting the final data into a production Feature Class
+
+
+LONG VERSION:
+Set up variables
+1. Set some variables directly in the script
+2. Set some variables from a config file
+
+Start Calling Functions
+1. Turn all 'print' statements into a log-writing object for logging purposes.
+
+2. Get the path to the most recently downloaded data.
+     This is the path of the data that was most recently downloaded from AGOL
+     with the 'DA_Download_Fire_Data.py' script.
+
+3. Set the date that the data was most recently downloaded.
+     The date is set into a Feature Class (FC) that has an attribute
+     'AGOL_Data_Last_Downloaded'.
+     This is used to report in the Dashboard when the data was downloaded.
+
+4. Get an extract of all parcels that intersect with the DA Reports.
+     This selects all the parcels that intersect with the DA Reports and exports
+     them to their own FC 'Parcel_All_Int_DA_Reports'.
+     We do this so that the Parcel and DA Report Join that happens below is MUCH faster.
+
+5. Spatially Join the DA Reports with the extracted Parcels from above to get the working data FC.
+     This creates a point FC that has all the data from the DA Reports AND the extracted Parcels.
+
+6. Handle data on a stacked parcel.
+     Stacked parcels are multiple APN's on one parcel footprint.
+     If a DA Report is on a stacked parcel we either keep the first point and
+     nullify all the other points that were created during the spatial join from above,
+     OR we keep only the point with the correct APN if that Report Number and Parcel APN were 'linked' in a Control CSV.
+     This is a complicated function, please see documentation in the function 'Handle_Stacked_Parcels' below.
+
+7. Add fields to the working data.
+     This function uses a Control CSV to programatically add the same fields every script execution.
+     Please see which fields are added by viewing the 'FieldsToAdd.csv' file.
+
+8. Calculate fields in the working data.
+     This functions uses a Control CSV to programatically calc the same fields every script execution.
+     Please see which fields are calced by viewing the 'FieldsToCalculate.csv' file.
+
+9. QA/QC the working data.
+     This function writes to a separate log file that only contains the below QA/QC checks.
+     This separate QA/QC log file can be placed in a folder that can be viewable
+     by a layperson in order to tell them how they should edit the data themselves to produce good data.
+     This is a complicated function, please see documentation in the function 'QA_QC_Data' below.
+
+10. Backup the production FC before attempting to edit it
+      This function will create a copy of the current production FC and place
+      the copy in the same FGDB with '_BAK' appended to it.
+
+11. Delete the features in the prod FC
+      This function will only delete the existing features in the FC, it will not delete the FC itself.
+      This is so any settings (fields, domains) that are a part of the FC will remain intact.
+
+12. Append the features from the working FC to the prod Fc
+      This function will only append the features in the working FC to the prod FC, it will not recreate the prod FC itself.
+      This is so any settings (fields, domains) that are a part of the prod FC will remain intact.
+
+13. Get a token from AGOL so we have permission to access the AGOL database with the original DA Reports.
+
+14. Update the AGOL fields.
+      This function updates the AGOL DA Reports
+      a. Update any features where the '[Quantity] IS NULL' to have a Quantity = 1.
+           We do this because it is possible for a user to have sent a survey
+           with a quantity of NULL by removing the default accidentally when
+           they filled out the survey.  So if [Quantity] IS NULL, we should just
+           assume they meant that it is '1'.
+      b. Update ALL features in AGOL that have an [EstimatedReplacementCost] value in the working FC.
+           We do this because we have already calculated the values of
+           [EstimatedReplacementCost] (in the 'Fields_Calculate_Fields' function above),
+           and we want to push any calculations we made on the working FC to the AGOL data.
+
+End of script reporting
+1. Print out a footer and if the script was successful or not.
+2. Send an email with the results of the script.
 """
 #
 # Author:      mgrue
@@ -24,7 +104,6 @@ def main():
     #---------------------------------------------------------------------------
     #                     Set Variables that will change
 
-    # The below variables are used if running the script
     # Set the path prefix depending on if this script is called manually by a
     #  user, or called by a scheduled task on ATLANTIC server.
     called_by = arcpy.GetParameterAsText(0)
@@ -45,6 +124,8 @@ def main():
     ##email_admin_ls = ['michael.grue@sdcounty.ca.gov', 'randy.yakos@sdcounty.ca.gov', 'gary.ross@sdcounty.ca.gov']
     email_admin_ls = ['michael.grue@sdcounty.ca.gov']
 
+    # Flag to control if there is an error
+    success = True
     #---------------------------------------------------------------------------
     #---------------------------------------------------------------------------
     #                   Use cfgFile to set the below variables
@@ -103,11 +184,6 @@ def main():
     name_of_FS           = config.get('Download_Info', 'FS_name')
     index_of_layer_in_FS = config.get('Download_Info', 'FS_index')
 
-    #---------------------------------------------------------------------------
-    #                Set Variables that will probably not change
-
-    # Flag to control if there is an error
-    success = True
 
     #---------------------------------------------------------------------------
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -122,21 +198,6 @@ def main():
             success = False
             print '\n*** ERROR with Write_Print_To_Log() ***'
             print str(e)
-
-    # Get a token with permissions to view the AGOL data
-    if success == True:
-        try:
-            token = Get_Token(cfgFile)
-        except Exception as e:
-            success = False
-            print '\n*** ERROR with Get_Token() ***'
-            print str(e)
-
-
-    #---------------------------------------------------------------------------
-    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    #---------------------------------------------------------------------------
-    #                 Non-standard Template Functions go HERE
 
     # Get the path to the most recently downloaded data
     if success == True:
@@ -160,7 +221,7 @@ def main():
             print str(e)
 
     #---------------------------------------------------------------------------
-    # Get an extract of all parcels that overlap with the DA Reports
+    # Get an extract of all parcels that intersect with the DA Reports
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
@@ -187,7 +248,7 @@ def main():
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-##            Handle_Stacked_Parcels(orig_DA_reports_fc, working_fc, parcels_extract_path, match_Report_to_APN_csv)
+            Handle_Stacked_Parcels(orig_DA_reports_fc, working_fc, parcels_extract_path, match_Report_to_APN_csv)
         except Exception as e:
             success = False
             print '\n*** ERROR with Handle_Stacked_Parcels() ***'
@@ -220,7 +281,7 @@ def main():
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            QA_QC_Data(orig_DA_reports_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract_path, match_Report_to_APN_csv)
+            success = QA_QC_Data(orig_DA_reports_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract_path, match_Report_to_APN_csv)
         except Exception as e:
             success = False
             print '\n*** ERROR with QA_QC_Data() ***'
@@ -263,6 +324,15 @@ def main():
     #---------------------------------------------------------------------------
     #                           Update AGOL fields
     #---------------------------------------------------------------------------
+    # Get a token with permissions to view the AGOL data
+    if success == True:
+        try:
+            token = Get_Token(cfgFile)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Get_Token() ***'
+            print str(e)
+
     # Update AGOL fields
     if success == True:
         try:
@@ -299,7 +369,7 @@ def main():
         Please see the log file for more info.<br>
         The Log file is found at: {}""".format(log_file_date)
 
-##    Email_W_Body(subj, body, email_admin_ls, cfgFile)
+    Email_W_Body(subj, body, email_admin_ls, cfgFile)
 
     if success == True:
         print '\nSUCCESSFULLY ran {}'.format(name_of_script)
@@ -1206,170 +1276,192 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extr
     print '\n  Find log file found at:\n    {}'.format(log_file_date)
     sys.stdout = write_to_log
 
-    #===========================================================================
-    # Every print statement between the equal (=) symbols will print to a QA/Q log file.
+    try:
+        #===========================================================================
+        # Every print statement between the equal (=) symbols will print to a QA/Q log file.
 
-    # Make a header for the new QA/QC log file
-    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
-    print '                   Start DA Fire QA/QC Log'
-    print 'This is the log file for any QA/QC checks that were performed by the'
-    print 'Process_DA_Fire_Data.py script on the downloaded AGOL'
-    print 'Fire Damage Assessment data'
-    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+        # Make a header for the new QA/QC log file
+        print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+        print '                   Start DA Fire QA/QC Log'
+        print 'This is the log file for any QA/QC checks that were performed by the'
+        print 'Process_DA_Fire_Data.py script on the downloaded AGOL'
+        print 'Fire Damage Assessment data'
+        print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
 
-    #---------------------------------------------------------------------------
-    #      1) Check to see if any features are not on a parcel
-    print '\n------------------------------------------------------------------'
-    print '1) Checking for features that are not a parcel...'
+        #---------------------------------------------------------------------------
+        #      1) Check to see if any features are not on a parcel
+        print '\n------------------------------------------------------------------'
+        print '1) Checking for features that are not a parcel...'
 
-    # Select features that do not intersect the parcel_extract
-    arcpy.MakeFeatureLayer_management(orig_fc, 'orig_fc_lyr')
-    arcpy.SelectLayerByLocation_management('orig_fc_lyr', 'INTERSECT', parcels_extract, '', 'NEW_SELECTION', 'INVERT')
+        # Select features that do not intersect the parcel_extract
+        arcpy.MakeFeatureLayer_management(orig_fc, 'orig_fc_lyr')
+        arcpy.SelectLayerByLocation_management('orig_fc_lyr', 'INTERSECT', parcels_extract, '', 'NEW_SELECTION', 'INVERT')
 
-    not_on_parcel_ls = []
-    with arcpy.da.SearchCursor('orig_fc_lyr', ['ReportNumber']) as cursor:
-        for row in cursor:
-            not_on_parcel_ls.append(row[0])
+        not_on_parcel_ls = []
+        with arcpy.da.SearchCursor('orig_fc_lyr', ['ReportNumber']) as cursor:
+            for row in cursor:
+                not_on_parcel_ls.append(row[0])
+            del cursor
 
-    # Report findings
-    if (len(not_on_parcel_ls) > 0):
-        print '  WARNING! There were "{}" features not on a parcel'.format(len(not_on_parcel_ls))
-        print '  Report Number:'
-        for report_number in not_on_parcel_ls:
-            print '    {}'.format(report_number)
-        print '\n  ANY DAMAGE ASSESSMENT STAFF, to fix please log onto AGOL Web Map'
-        print '  and move the features with the above Report Numbers to the correct parcel.'
-    else:
-        print '  OK! There were no features not on a parcel.'
+        # Report findings
+        if (len(not_on_parcel_ls) > 0):
+            del row  # if len() > 0 then there was a 'row' variable created.  Delete it.
+            print '  WARNING! There were "{}" features not on a parcel'.format(len(not_on_parcel_ls))
+            print '  Report Number:'
+            for report_number in not_on_parcel_ls:
+                print '    {}'.format(report_number)
+            print '\n  ANY DAMAGE ASSESSMENT STAFF, to fix please log onto AGOL Web Map'
+            print '  and move the features with the above Report Numbers to the correct parcel.'
+        else:
+            print '  OK! There were no features not on a parcel.'
 
-    arcpy.Delete_management('orig_fc_lyr')
-    del cursor, row
-    #---------------------------------------------------------------------------
-    #      2) Check to see if any features are on a parcel but have no APN info
-    print '\n------------------------------------------------------------------'
-    print '2) Checking for features that are on a parcel but have no APN info...'
+        arcpy.Delete_management('orig_fc_lyr')
 
-    # Select features that have are NULL for [APN] and intersect parcel_extract
-    where_clause = "APN IS NULL"
-    arcpy.MakeFeatureLayer_management(working_fc, 'working_fc_lyr', where_clause)
-    arcpy.SelectLayerByLocation_management('working_fc_lyr', 'INTERSECT', parcels_extract)
+        #---------------------------------------------------------------------------
+        #      2) Check to see if any features are on a parcel but have no APN info
+        print '\n------------------------------------------------------------------'
+        print '2) Checking for features that are on a parcel but have no APN info...'
 
-    no_apn_info_ls = []
+        # Select features that have are NULL for [APN] and intersect parcel_extract
+        where_clause = "APN IS NULL"
+        arcpy.MakeFeatureLayer_management(working_fc, 'working_fc_lyr', where_clause)
+        arcpy.SelectLayerByLocation_management('working_fc_lyr', 'INTERSECT', parcels_extract)
 
-    with arcpy.da.SearchCursor('working_fc_lyr', ['ReportNumber']) as cursor:
-        for row in cursor:
-            no_apn_info_ls.append(row[0])
+        no_apn_info_ls = []
 
-    # Report findings
-    if (len(no_apn_info_ls) > 0):
-        print '  WARNING! There were "{}" Reports on a parcel but have no APN info'.format(len(no_apn_info_ls))
-        print '  Report Number:'
-        for report_number in no_apn_info_ls:
-            print '    {}'.format(report_number)
-        print '\n  This usually happens if the report is on a stacked parcel and'
-        print '  there is no info as to which APN the report should be associated with.'
-        print '\n  ANY DAMAGE ASSESSMENT STAFF, to fix please use CSV located at:\n    {}'.format(match_Report_to_APN_csv)
-        print '  To add the above reports and APNs you wish associated to each other.'
-    else:
-        print '  OK! There were no features on a parcel w/o APN info.'
+        with arcpy.da.SearchCursor('working_fc_lyr', ['ReportNumber']) as cursor:
+            for row in cursor:
+                no_apn_info_ls.append(row[0])
+            del cursor
 
-    arcpy.Delete_management('working_fc_lyr')
-    del cursor, row
+        # Report findings
+        if (len(no_apn_info_ls) > 0):
+            del row  # if len() > 0 then there was a 'row' variable created.  Delete it.
+            print '  WARNING! There were "{}" Reports on a parcel but have no APN info'.format(len(no_apn_info_ls))
+            print '  Report Number:'
+            for report_number in no_apn_info_ls:
+                print '    {}'.format(report_number)
+            print '\n  This usually happens if the report is on a stacked parcel and'
+            print '  there is no info as to which APN the report should be associated with.'
+            print '\n  ANY DAMAGE ASSESSMENT STAFF, to fix please use CSV located at:\n    {}'.format(match_Report_to_APN_csv)
+            print '  To add the above reports and APNs you wish associated to each other.'
+        else:
+            print '  OK! There were no features on a parcel w/o APN info.'
 
-    #---------------------------------------------------------------------------
-    #      3) Check to see if there are any duplicates in [ReportNumber]
-    print '\n------------------------------------------------------------------'
-    print '3) Checking for features with duplicate Report Numbers...'
-    print '  At: {}\n'.format(orig_fc)
-    orig_list = []
-    dup_list  = []
+        arcpy.Delete_management('working_fc_lyr')
 
-    # Use data from AGOL (orig_fc) before it is potentially split into
-    # multiple records by the Spatial Join proecss, which would result in false
-    # positive results when searching for duplicate Report Numbers
-    with arcpy.da.SearchCursor(orig_fc, ['ReportNumber']) as cursor:
-        for row in cursor:
-            report_number = row[0]
+        #---------------------------------------------------------------------------
+        #      3) Check to see if there are any duplicates in [ReportNumber]
+        print '\n------------------------------------------------------------------'
+        print '3) Checking for features with duplicate Report Numbers...'
+        print '  At: {}\n'.format(orig_fc)
+        orig_list = []
+        dup_list  = []
 
-            # Sort each report number into one of two lists
-            if report_number in orig_list:
-                dup_list.append(report_number)
-            else:
-                orig_list.append(report_number)
+        # Use data from AGOL (orig_fc) before it is potentially split into
+        # multiple records by the Spatial Join proecss, which would result in false
+        # positive results when searching for duplicate Report Numbers
+        with arcpy.da.SearchCursor(orig_fc, ['ReportNumber']) as cursor:
+            for row in cursor:
+                report_number = row[0]
 
-        del cursor
+                # Sort each report number into one of two lists
+                if report_number in orig_list:
+                    dup_list.append(report_number)
+                else:
+                    orig_list.append(report_number)
 
-    if (len(dup_list) > 0):
-        print '  WARNING! There were duplicate Report Numbers:'
-        for dup in dup_list:
-            print '    {}'.format(dup)
-        print '\n  LUEG-GIS, please log onto the AGOL database and find out why there are'
-        print '  duplicate Report Numbers.  Survey123 should create a unique'
-        print '  Report Number as long as staff don\'t start their surveys at'
-        print '  the same 1/100th of a second.'
+            del cursor
 
-    else:
-        print '  OK! There were no duplicate Report Numbers.'
+        if (len(dup_list) > 0):
+            del row  # if len() > 0 then there was a 'row' variable created.  Delete it.
+            print '  WARNING! There were duplicate Report Numbers:'
+            for dup in dup_list:
+                print '    {}'.format(dup)
+            print '\n  LUEG-GIS, please log onto the AGOL database and find out why there are'
+            print '  duplicate Report Numbers.  Survey123 should create a unique'
+            print '  Report Number as long as staff don\'t start their surveys at'
+            print '  the same 1/100th of a second.'
 
-    #---------------------------------------------------------------------------
-    #      4) Check to see if any features have NULL in the field [ReportNumber]
-    print '\n------------------------------------------------------------------'
-    print '4) Checking for features with no Report Number...'
+        else:
+            print '  OK! There were no duplicate Report Numbers.'
 
-    # Select features that do not have a Report Number
-    where_clause = "ReportNumber IS NULL or ReportNumber = '' "
-    print '  At: {}\n  Where: {}\n'.format(working_fc, where_clause)
-    lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
+        #---------------------------------------------------------------------------
+        #      4) Check to see if any features have NULL in the field [ReportNumber]
+        print '\n------------------------------------------------------------------'
+        print '4) Checking for features with no Report Number...'
 
-    # Get count of the number of features selected
-    num_selected = Get_Count_Selected(lyr)
+        # Select features that do not have a Report Number
+        where_clause = "ReportNumber IS NULL or ReportNumber = '' "
+        print '  At: {}\n  Where: {}\n'.format(working_fc, where_clause)
+        lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
 
-    # Report findings
-    if num_selected > 0:
-        print '  WARNING! There were {} features without a Report Number at the time the data was downloaded.'.format(num_selected)
-        print '\n  LUEG-GIS, please log onto AGOL and find out why there is no Report Number for these features.'
-        print '  Survey123 should auto generate report numbers, so if there is a record w/o a Report Number'
-        print '  it is possible that the record was created by the AGOL Web Map.  If so, this is against normal workflow'
-        print '  and must be investigated.'
-    else:
-        print '  OK! There were no features without a Report Number.'
+        # Get count of the number of features selected
+        num_selected = Get_Count_Selected(lyr)
 
-    #---------------------------------------------------------------------------
-    #      5) Check to see if any features have NULL in [IncidentName]
-    print '\n------------------------------------------------------------------'
-    print '5) Checking for features with no Incident Name...'
+        # Report findings
+        if num_selected > 0:
+            print '  WARNING! There were {} features without a Report Number at the time the data was downloaded.'.format(num_selected)
+            print '\n  LUEG-GIS, please log onto AGOL and find out why there is no Report Number for these features.'
+            print '  Survey123 should auto generate report numbers, so if there is a record w/o a Report Number'
+            print '  it is possible that the record was created by the AGOL Web Map.  If so, this is against normal workflow'
+            print '  and must be investigated.'
+        else:
+            print '  OK! There were no features without a Report Number.'
 
-    # Select features that do not have an Incident Name
-    where_clause = "IncidentName IS NULL or IncidentName = '' "
-    print '  At: {}\n  Where: {}\n'.format(working_fc, where_clause)
-    lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
+        #---------------------------------------------------------------------------
+        #      5) Check to see if any features have NULL in [IncidentName]
+        print '\n------------------------------------------------------------------'
+        print '5) Checking for features with no Incident Name...'
 
-    # Get count of the number of features selected
-    num_selected = Get_Count_Selected(lyr)
+        # Select features that do not have an Incident Name
+        where_clause = "IncidentName IS NULL or IncidentName = '' "
+        print '  At: {}\n  Where: {}\n'.format(working_fc, where_clause)
+        lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
 
-    # Report findings
-    if num_selected > 0:
-        print '  INFO: There were "{}" features without an Incident Name at the time the data was downloaded.'.format(num_selected)
-        print '  It is expected that LUEG-GIS staff will fill out the Incident Name as needed.'
-        print '\n  LUEG-GIS, please log onto AGOL and fill out an Incident Name for these features.'
-        print '  If there are more than one current incident, this should be done now.'
-        print '  If there is only one current incident, this can be done when convenient,'
+        # Get count of the number of features selected
+        num_selected = Get_Count_Selected(lyr)
 
-    else:
-        print '  OK! There were no features without an Incident Name.'
+        # Report findings
+        if num_selected > 0:
+            print '  INFO: There were "{}" features without an Incident Name at the time the data was downloaded.'.format(num_selected)
+            print '  It is expected that LUEG-GIS staff will fill out the Incident Name as needed.'
+            print '\n  LUEG-GIS, please log onto AGOL and fill out an Incident Name for these features.'
+            print '  If there are more than one current incident, this should be done now.'
+            print '  If there is only one current incident, this can be done when convenient.'
 
-    #---------------------------------------------------------------------------
-    # Make a footer for the new QA/QC log file
-    print ''
-    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
-    print '                      End DA Fire QA/QC'
-    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+        else:
+            print '  OK! There were no features without an Incident Name.'
 
-    #---------------------------------------------------------------------------
-    # Return the print statement to write to our general log file
-    sys.stdout = orig_logfile
+        #---------------------------------------------------------------------------
+        # Make a footer for the new QA/QC log file
+        print ''
+        print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+        print '                      End DA Fire QA/QC'
+        print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+
+        #-----------------------------------------------------------------------
+        # Return the print statement to write to our general log file
+        sys.stdout = orig_logfile
+        success = True  # This function completed successfully
+
+    except Exception as e:
+        success = False
+
+        # If there is an error, print error in the QA/QC Log file
+        print '\n*** ERROR with QA_QC_Data() ***'
+        print str(e)
+
+        # Return the print statement to write to our general log file and print the same error
+        sys.stdout = orig_logfile
+        print '\n*** ERROR with QA_QC_Data() ***'
+        print str(e)
+
+
     #===========================================================================
     print '\nFinished QA_QC_Data()\n'
+
+    return success
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -1570,7 +1662,7 @@ def Append_Data(input_item, target, schema_type='NO_TEST', field_mapping=None):
     print '  To:   {}'.format(target)
 
     # If there is a field mapping object, make sure there is no schema test
-    if field_mapping <> None:
+    if field_mapping != None:
         schema_type = 'NO_TEST'
 
     # Process
@@ -1598,7 +1690,7 @@ def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
 
     #---------------------------------------------------------------------------
     #               Update (in AGOL) NULL [Quantity] to equal 1
-    print '\nUpdating (in AGOL) any records with a NULL [Quantity] to equal 1'
+    print '\n  Updating (in AGOL) any records with a NULL [Quantity] to equal 1'
 
     # Get list of Object IDs
     where_clause = "Quantity IS NULL"
@@ -1615,10 +1707,10 @@ def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
     #           Update (in AGOL) NULL [EstimatedReplacementCost]
     #                to equal (in working database) [EstimatedReplacementCost]
     # Make a cursor that only looks at reports with an Estimated Replacement Cost
-    print '\nUpdating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
+    print '\n  Updating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
     fields = ['EstimatedReplacementCost', 'ReportNumber']
     cur_where_clause = "EstimatedReplacementCost IS NOT NULL"
-    print '  Cursor Where Clause: "{}"'.format(cur_where_clause)
+    print '    Cursor Where Clause: "{}"'.format(cur_where_clause)
     with arcpy.da.SearchCursor(working_fc, fields, cur_where_clause) as cursor:
         for row in cursor:
             est_replcmt_cost = row[0]
@@ -1636,7 +1728,7 @@ def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
                 for object_id in obj_ids:
                     AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
 
-    print 'Finished Append_Data()\n'
+    print 'Finished Update_AGOL_Fields()\n'
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                FUNCTION:    Get AGOL Object IDs Where
@@ -1668,8 +1760,8 @@ def AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, to
     Get_Token() and are passing it to this function via the 'token' variable.
     """
 
-    print '--------------------------------------------------------------------'
-    print "Starting Get_AGOL_Object_Ids_Where()"
+    print '  ------------------------------------------------------------------'
+    print "  Starting AGOL_Get_Object_Ids_Where()"
     import urllib2, urllib, json
 
     #TODO: have a success variable to return
@@ -1688,8 +1780,8 @@ def AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, to
 
     # Get the list of OBJECTID's that satisfied the where_clause
 
-    print '  Getting list of OBJECTID\'s that satisfied the where clause for layer:\n    {}'.format(query_url)
-    print '  Where clause: "{}"'.format(where_clause)
+    print '    Getting list of OBJECTID\'s that satisfied the where clause for layer:\n      {}'.format(query_url)
+    print '    Where clause: "{}"'.format(where_clause)
     response = urllib2.urlopen(get_object_id_url)
     response_json_obj = json.load(response)
     try:
@@ -1700,15 +1792,15 @@ def AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, to
         print '  If you receive "Invalid URL", are you sure you have the correct FS name?'
 
     if len(object_ids) > 0:
-        print '  There are "{}" features that satisfied the query.'.format(len(object_ids))
-        print '  OBJECTID\'s of those features:'
+        print '    There are "{}" features that satisfied the query.'.format(len(object_ids))
+        print '    OBJECTID\'s of those features:'
         for obj in object_ids:
-            print '    {}'.format(obj)
+            print '      {}'.format(obj)
 
     else:
-        print '  No features satisfied the query.'
+        print '    No features satisfied the query.'
 
-    print "Finished Get_AGOL_Object_Ids_Where()\n"
+    print "  Finished AGOL_Get_Object_Ids_Where()\n"
 
     return object_ids
 
@@ -1739,8 +1831,8 @@ def AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_u
       To Update features on an AGOL Feature Service.
     """
 
-    print '--------------------------------------------------------------------'
-    print "Starting AGOL_Update_Features()"
+    print '  ------------------------------------------------------------------'
+    print "  Starting AGOL_Update_Features()"
     import urllib2, urllib, json
 
     success = True
@@ -1755,11 +1847,11 @@ def AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_u
 
 
     # Update the features
-    print '  Updating Features in FS: {}'.format(name_of_FS)
-    print '                 At index: {}'.format(index_of_layer_in_FS)
-    print '   OBJECTID to be updated: {}'.format(object_id)
-    print '      Field to be updated: {}'.format(field_to_update)
-    print '   New value for updt fld: {}'.format(new_value)
+    print '    Updating Features in FS: {}'.format(name_of_FS)
+    print '                   At index: {}'.format(index_of_layer_in_FS)
+    print '     OBJECTID to be updated: {}'.format(object_id)
+    print '        Field to be updated: {}'.format(field_to_update)
+    print '     New value for updt fld: {}'.format(new_value)
 
     ##print update_url + update_params
     response  = urllib2.urlopen(update_url, update_params)
@@ -1768,12 +1860,12 @@ def AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_u
 
     for result in response_json_obj['updateResults']:
         ##print result
-        print '    OBJECTID: {}'.format(result['objectId'])
-        print '      Updated? {}'.format(result['success'])
+        print '     OBJECTID: {}'.format(result['objectId'])
+        print '       Updated? {}'.format(result['success'])
         if result['success'] != True:
             success = False
 
-    print 'Finished AGOL_Update_Features()\n'
+    print '\n  Finished AGOL_Update_Features()\n'
     return success
 
 #-------------------------------------------------------------------------------

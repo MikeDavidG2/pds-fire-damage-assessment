@@ -54,7 +54,7 @@ Users set some variables in this script:
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 
-import arcpy, sys, datetime, os, ConfigParser
+import arcpy, sys, datetime, os, ConfigParser, time
 arcpy.env.overwriteOutput = True
 
 def main():
@@ -85,34 +85,43 @@ def main():
     else:  # If script run directly and no called_by parameter is specified
         path_prefix = 'P:'
 
+    #---------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
+    #                   Use cfgFile to set the below variables
+    try:
+        # Full path to a text file that has the username and password of an account
+        #  that has access to at least VIEW the FS in AGOL, as well as an email
+        #  account that has access to send emails.
+        cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Download_and_Process.ini".format(path_prefix)
+        if os.path.isfile(cfgFile):
+            config = ConfigParser.ConfigParser()
+            config.read(cfgFile)
+        else:
+            print("INI file not found. \nMake sure a valid '.ini' file exists at {}.".format(cfgFile))
+            sys.exit()
 
-    # Full path to a text file that has the username and password of an account
-    #  that has access to at least VIEW the FS in AGOL, as well as an email
-    #  account that has access to send emails.
-    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Download_and_Process.ini".format(path_prefix)
-    if os.path.isfile(cfgFile):
-        config = ConfigParser.ConfigParser()
-        config.read(cfgFile)
-    else:
-        print("INI file not found. \nMake sure a valid '.ini' file exists at {}.".format(cfgFile))
+        # FS_name is the name of the Feature Service (FS) with the layer you want
+        #  to download (d/l).  For example: "Homeless_Activity_Sites"
+        FS_name        = config.get('Download_Info', 'FS_name')
+
+        # Index of the layer in the FS you want to d/l.  Frequently 0.
+        index_of_layer = config.get('Download_Info', 'FS_index')
+
+        # Set working folder that holds the FGDBs, the name of the FGDBs and the FC names.
+        wkg_folder     = config.get('Download_Info', 'wkg_folder')
+
+        # Get list of name of the existing FGDB to put the new data into
+        FGDB_name     = config.get('Download_Info', 'FGDB_name')
+
+        FC_name       = config.get('Download_Info', 'FC_name')
+
+    except Exception as e:
+        print '*** ERROR! There was a problem setting variables from the config file'
+        print str(e)
+        time.sleep(5)
         sys.exit()
 
-    # FS_name is the name of the Feature Service (FS) with the layer you want
-    #  to download (d/l).  For example: "Homeless_Activity_Sites"
-    FS_name        = config.get('Download_Info', 'FS_name')
-
-    # Index of the layer in the FS you want to d/l.  Frequently 0.
-    index_of_layer = config.get('Download_Info', 'FS_index')
-
-    # Set working folder that holds the FGDBs, the name of the FGDBs and the FC names.
-    wkg_folder     = config.get('Download_Info', 'wkg_folder')
-
-    # Get list of name of the existing FGDB to put the new data into
-    FGDB_name     = config.get('Download_Info', 'FGDB_name')
-
-    FC_name       = config.get('Download_Info', 'FC_name')
-
-
+    #---------------------------------------------------------------------------
     # Set the log file variables
     log_file = r'{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Logs\{}'.format(path_prefix, name_of_script.split('.')[0])
 
