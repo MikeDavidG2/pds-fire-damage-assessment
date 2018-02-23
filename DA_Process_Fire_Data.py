@@ -53,9 +53,11 @@ Start Calling Functions
      by a layperson in order to tell them how they should edit the data themselves to produce good data.
      This is a complicated function, please see documentation in the function 'QA_QC_Data' below.
 
-10. Backup the production FC before attempting to edit it
-      This function will create a copy of the current production FC and place
-      the copy in the same FGDB with '_BAK' appended to it.
+10. Backup the production features before attempting to edit them.
+      This function will only delete the existing features in the FC, it will not delete the FC itself.
+      This is so we do not need to have an admin connection to the SDE, and we
+      don't have to worry about schema locks.
+      NOTE: If the schema of the prod FC changes, this _BAK FC will need to be manually changed.
 
 11. Delete the features in the prod FC
       This function will only delete the existing features in the FC, it will not delete the FC itself.
@@ -288,14 +290,27 @@ def main():
             print str(e)
 
     #---------------------------------------------------------------------------
-    # Backup the production FC before attempting to edit it
+    #                     Backup the production features
+    #                     before attempting to change it
+    # Delete the features in the backup database
+    if success == True:
+        try:
+            backup_fc = '{}_BAK'.format(prod_FC_path)
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            Delete_Features(backup_fc)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Delete_Features() ***'
+            print str(e)
+
+    # Append the features from the production database to the backup database
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            Backup_FC(prod_FC_path)
+            Append_Data(prod_FC_path, backup_fc)
         except Exception as e:
             success = False
-            print '\n*** ERROR with Backup_FC() ***'
+            print '\n*** ERROR with Append_Data() ***'
             print str(e)
 
     #---------------------------------------------------------------------------
@@ -1515,77 +1530,6 @@ def Get_Count_Selected(lyr):
     ##print 'Finished Get_Count()\n'
 
     return count_selected
-
-#-------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
-#                         Function Backup Feature Class
-def Backup_FC(full_path_to_fc):
-    """
-    PARAMETERS:
-      full_path_to_fc (str): Full path to the FC you want to create a copy of.
-
-    RETURNS:
-      None
-
-    FUNCTION:
-      To create a copy of a FC.  Primarily as a Backup.  Appends '_BAK' to the
-      end of the copied FC.  The FC is copied to the same workspace as the
-      original FC.  The original FC remains unchanged.
-    """
-
-    arcpy.env.overwriteOutput = True
-    import os
-
-    print '--------------------------------------------------------------------'
-    print 'Starting Backup_FC()'
-
-
-    in_features = full_path_to_fc
-    out_path    = os.path.dirname(full_path_to_fc)
-    out_name    = '{}_BAK'.format(os.path.basename(full_path_to_fc))
-    out_full_path = '{}\{}'.format(out_path, out_name)
-
-    no_schema_lock = Test_Schema_Lock(out_full_path)
-
-    if no_schema_lock == True:
-        print '  Backing up FC: {}'.format(in_features)
-        print '             To: {}'.format(out_full_path)
-
-        arcpy.FeatureClassToFeatureClass_conversion (in_features, out_path, out_name)
-
-    else:
-        print '*** WARNING, There was a schema lock on:\n      {}'.format(out_full_path)
-        print '  A backup was not created of the current dataset.\n  The script is continuing to run.'
-        print '  Recommend creating a manual backup of the data at:\n    {}\n'.format(in_features)
-
-    print 'Finished Backup_FC()\n'
-
-#-------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
-#                          FUNCTION Test_Schema_Lock()
-def Test_Schema_Lock(dataset):
-    """
-    PARAMETERS:
-      dataset (str): Full path to a dataset to be tested if there is a schema lock
-
-    RETURNS:
-      no_schema_lock (Boolean): "True" or "False" if there is no schema lock
-
-    FUNCTION:
-      To perform a test on a dataset and return "True" if there is no schema
-      lock, and "False" if a schema lock already exists.
-    """
-
-    print 'Starting Test_Schema_Lock()...'
-
-    print '  Testing dataset: {}'.format(dataset)
-
-    no_schema_lock = arcpy.TestSchemaLock(dataset)
-    print '  Dataset available to have a schema lock applied to it = "{}"'.format(no_schema_lock)
-
-    print 'Finished Test_Schema_Lock()\n'
-
-    return no_schema_lock
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
