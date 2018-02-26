@@ -11,10 +11,11 @@ The users set many of the variables in a config file:
        the data (used to get the token).
     2) Username and Password of a google account that can be used to send an
        email.
-    3) Name of the Feature Service to download
-    4) Feature Service index
-    5) FGDB name
-    6) FC name
+    3) Path the the log file folder
+    4) Name of the Feature Service to download
+    5) Feature Service index
+    6) FGDB name
+    7) FC name
 
     Format for config file:
 
@@ -42,8 +43,6 @@ The users set many of the variables in a config file:
 Users set some variables in this script:
   Name of this script
   Location of the config file
-  Working Folder you want the data downloaded to
-  Location you want to create the log file
   Email addresses to get a notification of success or failure.
 """
 #
@@ -115,6 +114,9 @@ def main():
 
         FC_name       = config.get('Download_Info', 'FC_name')
 
+        # Set the log file path
+        log_file = r'{}\{}'.format(config.get('Download_Info', 'Log_File_Folder'), name_of_script.split('.')[0])
+
     except Exception as e:
         print '*** ERROR! There was a problem setting variables from the config file'
         print str(e)
@@ -122,9 +124,6 @@ def main():
         sys.exit()
 
     #---------------------------------------------------------------------------
-    # Set the log file variables
-    log_file = r'{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Logs\{}'.format(path_prefix, name_of_script.split('.')[0])
-
     # Set the Email variables
     ##email_admin_ls = ['michael.grue@sdcounty.ca.gov', 'randy.yakos@sdcounty.ca.gov', 'gary.ross@sdcounty.ca.gov']
     email_admin_ls = ['michael.grue@sdcounty.ca.gov']

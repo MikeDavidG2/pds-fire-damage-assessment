@@ -166,7 +166,7 @@ def main():
 
 
     # Set the log file paths
-    log_file_folder = config.get('Process_Info', 'Log_File_Folder')
+    log_file_folder = config.get('Download_Info', 'Log_File_Folder')
     log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
 
     QA_QC_log_folder = config.get('Process_Info', 'QA_QC_Log_Folder')
@@ -205,10 +205,10 @@ def main():
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            orig_DA_reports_fc = Get_Newest_Downloaded_Data(raw_agol_FGDB_path)
+            orig_DA_reports_fc = Get_Newest_Data(raw_agol_FGDB_path)
         except Exception as e:
             success = False
-            print '\n*** ERROR with Get_Newest_Downloaded_Data() ***'
+            print '\n*** ERROR with Get_Newest_Data() ***'
             print str(e)
 
     #---------------------------------------------------------------------------
@@ -216,10 +216,10 @@ def main():
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL_path)
+            Set_Date_Data_DL(orig_DA_reports_fc, AGOL_Data_DL_path)
         except Exception as e:
             success = False
-            print '\n*** ERROR with Set_Date_DA_Reports_DL() ***'
+            print '\n*** ERROR with Set_Date_Data_DL() ***'
             print str(e)
 
     #---------------------------------------------------------------------------
@@ -238,10 +238,10 @@ def main():
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            working_fc = Join_DA_Reports_w_Parcels(orig_DA_reports_fc, processing_FGDB_path, parcels_extract_path)
+            working_fc = Join_2_FC_By_Spatial_Join(orig_DA_reports_fc, parcels_extract_path, processing_FGDB_path)
         except Exception as e:
             success = False
-            print '\n*** ERROR with Join_DA_Reports_w_Parcels() ***'
+            print '\n*** ERROR with Join_2_FC_By_Spatial_Join() ***'
             print str(e)
 
     #---------------------------------------------------------------------------
@@ -489,20 +489,25 @@ def Get_DT_To_Append():
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
-#                         FUNCTION: Get Newest Downloaded Data
-def Get_Newest_Downloaded_Data(raw_agol_FGDB_path):
+#                         FUNCTION: Get Newest Data
+def Get_Newest_Data(FGDB_path):
     """
     PARAMETERS:
-      raw_agol_FGDB_path (str):
+      FGDB_path (str): Full path to a FGDB that contains the data to be searched.
+        Data in this FGDB must contain FC's that are all named the same with the
+        only difference between the FC's is that their time stamp is different.
+        See below for info about the timestamp naming convention.
 
     RETURNS:
-      newest_download_path(str):
+      newest_download_path(str): Full path to a FC that contains the newest
+        downloaded data.
 
     FUNCTION:
-      To return the path of the newest downloaded data.  This works if the FGDB
-      being searched only contains one FC basename and that FC is time stamped as
-      'YYYY_MM_DD__HH_MM_SS'.  This means that the newest data will be the last
-      FC in the list.
+      To return the full path of the FC containing the newest data.
+      This works if the FGDB being searched only contains one FC basename and
+      that FC is time stamped as 'YYYY_MM_DD__HH_MM_SS'.
+      This ensures that the newest data will be the first FC in the list
+      (because we do a reverse sort based on the name of the FC).
 
       For example:
         Data_From_AGOL_2018_01_01__10_00_00
@@ -511,10 +516,10 @@ def Get_Newest_Downloaded_Data(raw_agol_FGDB_path):
     """
 
     print '--------------------------------------------------------------------'
-    print 'Starting Get_Newest_Downloaded_Data()'
+    print 'Starting Get_Newest_Data()'
 
-    arcpy.env.workspace = raw_agol_FGDB_path
-    print 'Finding the newest downloaded data in: {}'.format(raw_agol_FGDB_path)
+    arcpy.env.workspace = FGDB_path
+    print 'Finding the newest data in: {}'.format(FGDB_path)
 
     # List all FC's in the FGDB
     AGOL_downloads = arcpy.ListFeatureClasses()
@@ -523,47 +528,63 @@ def Get_Newest_Downloaded_Data(raw_agol_FGDB_path):
     AGOL_downloads.sort(reverse=True)
     newest_download = AGOL_downloads[0]
 
-    # Set the path of the newest downloaded data
-    newest_download_path = '{}\{}'.format(raw_agol_FGDB_path, newest_download)
+    # Set the path of the newest data
+    newest_download_path = '{}\{}'.format(FGDB_path, newest_download)
     print 'The newest download is at:\n  {}'.format(newest_download_path)
 
-    print 'Finished Get_Newest_Downloaded_Data()\n'
+    print 'Finished Get_Newest_Data()\n'
 
     return newest_download_path
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
-#            FUNCTION: Set Date the AGOL DA Reports were Downloaded
-def Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL):
+#            FUNCTION: Set Date the AGOL data was Downloaded
+def Set_Date_Data_DL(fc_w_timestamp, fc_to_update):
     """
     PARAMETERS:
-      orig_DA_reports_fc (str):
+      fc_w_timestamp (str): Full path to a FC that contains a time stamp
+        of when the data was downloaded (or was 'current').  The time stamp
+        should be in the format 'YYYY_MM_DD__HH_MM_SS'.
+        i.e. 'Data_From_AGOL_2018_01_01__10_00_00'
 
-      AGOL_Data_DL (str):
+      fc_to_update (str): Full path to a FC or Table that contains a field named
+        'AGOL_Data_Last_Downloaded'.  This is the field that we will write the
+        read-friendly formatted time stamp.  If the field name is different,
+        that name will have to be specified below in the function itself.
+
+        i.e. a time stamp of:
+          2018_01_01__14_00_00
+        will become:
+          01 Jan, 2018 - 02:00:00 PM
 
     RETURNS:
       None
 
     FUNCTION:
-
+      To turn a FC or Table time stamp from 'YYYY_MM_DD__HH_MM_SS' to
+      'DD Month, YYYY - HH:MM:SS AM/PM' and set that read-friendly string into
+      another FC or Table.
+      Specifically we are setting the date and time the data
+      was downloaded from AGOL into a FC that will be used to report when the
+      data was downloaded.
     """
     print '--------------------------------------------------------------------'
-    print 'Starting Set_Date_DA_Reports_DL()'
+    print 'Starting Set_Date_Data_DL()'
 
     import time
 
     # Get the last 20 characters from the FC name (i.e. "2018_02_02__11_11_33")
-    dt_stripped = orig_DA_reports_fc[-20:]
+    dt_stripped = fc_w_timestamp[-20:]
 
     # Parse the string to time and format the time
     t = time.strptime(dt_stripped, '%Y_%m_%d__%H_%M_%S')
     t_formatted = time.mktime(t)
 
-    # Format time back into a string (i.e. "02 February, 2018 - 11:11:33 AM"
+    # Format time back into a string (i.e. "02 Feb, 2018 - 11:11:33 AM"
     AGOL_data_downloaded = time.strftime("%d %b, %Y - %I:%M:%S %p", time.localtime(t_formatted))
 
-    # Field Calculate the string into the AGOL_Data_DL FC
-    fc = AGOL_Data_DL
+    # Field Calculate the string into the fc_to_update FC
+    fc = fc_to_update
     field = 'AGOL_Data_Last_Downloaded'
     expression = '"{}"'.format(AGOL_data_downloaded)
 
@@ -572,50 +593,73 @@ def Set_Date_DA_Reports_DL(orig_DA_reports_fc, AGOL_Data_DL):
 
     arcpy.CalculateField_management(fc, field, expression)
 
-    print 'Finished Set_Date_DA_Reports_DL()\n'
+    print 'Finished Set_Date_Data_DL()\n'
+
     return
+
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                         FUNCTION: Extract Parcels
-def Extract_Parcels(parcels_all, orig_fc, parcels_int_orig_fc):
+def Extract_Parcels(parcels_all, related_fc, parcels_int_related_fc):
     """
     PARAMETERS:
-      parcels_all (str):
+      parcels_all (str): Full path to the PARCELS_ALL FC.  This should be an SDE
+        FC.
 
-      orig_fc (str):
+      related_fc (str):  Full path to a FC that will be used to select parcels
+        that intersect features in this FC.
 
-      parcels_int_orig_fc (str):
+      parcels_int_related_fc (str):  Full path to an EXISTING FC that will contain
+        the selected parcels.
 
     RETURNS:
       None
 
     FUNCTION:
+      To select the parcels that intersect the 'related_fc' features and then
+      appending the selected parcels into the the 'parcels_int_related_fc'.
 
+      This function is usually used to speed up other geoprocessing tasks that
+      may be performed on a parcels database.
+
+      NOTE: This function deletes the existing features in the
+        'parcels_int_related_fc' before appending the selected parcels so we get
+        a 'fresh' FC each run of the script AND there is no schema lock to worry
+        about.
     """
+
     print '--------------------------------------------------------------------'
     print 'Starting Extract_Parcels()'
+
+    print '  PARCELS_ALL FC path:\n    {}'.format(parcels_all)
+    print '  Related FC used to select parcels:\n    {}'.format(related_fc)
+
+    # Delete the existing features
+    print '  Deleting the old existing parcels at:\n    {}'.format(parcels_int_related_fc)
+    arcpy.DeleteFeatures_management(parcels_int_related_fc)
 
     # Make a feature layer out of the PARCELS_ALL FC
     arcpy.MakeFeatureLayer_management(parcels_all, 'par_all_lyr')
 
     # Select Parcels that intersect with the DA Reports
-    print '  Selecting parcels that intersect with the DA Reports'
-    arcpy.SelectLayerByLocation_management('par_all_lyr', 'INTERSECT', orig_fc)
+    print '\n  Selecting parcels that intersect with the DA Reports'
+    arcpy.SelectLayerByLocation_management('par_all_lyr', 'INTERSECT', related_fc)
 
     # Get count of selected parcels
     count = Get_Count_Selected('par_all_lyr')
-    print '  There are: "{}" selected parcels'.format(count)
+    print '  There are: "{}" selected parcels\n'.format(count)
 
     # Export selected parcels
     if (count != 0):
-        print '  Deleting the old existing parcels at: {}'.format(parcels_int_orig_fc)
-
-        # Delete the existing features
-        arcpy.DeleteFeatures_management(parcels_int_orig_fc)
 
         # Append the newly selected features
-        print '  Appending the selected parcels to the above FC'
-        arcpy.Append_management('par_all_lyr', parcels_int_orig_fc, 'NO_TEST')
+        print '  Appending the selected parcels to:\n    {}'.format(parcels_int_related_fc)
+        arcpy.Append_management('par_all_lyr', parcels_int_related_fc, 'NO_TEST')
+
+    else:
+        print '*** WARNING! There were no selected parcels. ***'
+        print '  Please find out why there were no selected parcels.'
+        print '  Script still allowed to run w/o an error flag.'
 
     print 'Finished Extract_Parcels()\n'
 
@@ -624,35 +668,38 @@ def Extract_Parcels(parcels_all, orig_fc, parcels_int_orig_fc):
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #               FUNCTION: Join DA Reports with Parcels Extract
-def Join_DA_Reports_w_Parcels(newest_download_path, processing_FGDB_path, parcels_extract):
+def Join_2_FC_By_Spatial_Join(target_fc, join_fc, output_FGDB):
     """
     PARAMETERS:
-      newest_download_path (str):
+      target_fc (str): Full path to the FC you want to be joined
+        to the join_fc.  These are the features you want to add data TO.
 
-      processing_FGDB_path (str):
+      join_fc (str): Full path to the FC that holds the data
+        you want to get information FROM.
 
-      parcels_extract (str):
+      output_FGDB (str): Path to the FGDB that you want to hold the newly created joined FC.
+        The full path to the FC in this FGDB will be calculated to be the path
+        of this FGDB + the name of the target_fc + '_joined'
 
     RETURNS:
-      working_fc (str)
+      output_fc (str): Full path to the FC that resulted from the spatial join
 
     FUNCTION:
-
+      To spatially join the tabular information from the join_fc to the target_fc.
     """
-    print '--------------------------------------------------------------------'
-    print 'Starting Join_DA_Reports_w_Parcels()'
 
-    target_features  = newest_download_path
-    join_features    = parcels_extract
-    working_fc       = '{}\{}_joined'.format(processing_FGDB_path, os.path.basename(newest_download_path))
+    print '--------------------------------------------------------------------'
+    print 'Starting Join_2_FC_By_Spatial_Join()'
+
+    output_fc       = '{}\{}_joined'.format(output_FGDB, os.path.basename(target_fc))
     join_operation   = 'JOIN_ONE_TO_MANY'
 
-    print '  Spatially Joining:\n    {}\n  With:\n    {}\n  Joined FC at:\n    {}'.format(target_features, join_features, working_fc)
-    arcpy.SpatialJoin_analysis(target_features, join_features, working_fc, join_operation)
+    print '  Spatially Joining:\n    {}\n  With:\n    {}\n  Joined FC at:\n    {}'.format(target_fc, join_fc, output_fc)
+    arcpy.SpatialJoin_analysis(target_fc, join_fc, output_fc, join_operation)
 
-    print 'Finished Join_DA_Reports_w_Parcels()\n'
+    print 'Finished Join_2_FC_By_Spatial_Join()\n'
 
-    return working_fc
+    return output_fc
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -660,23 +707,64 @@ def Join_DA_Reports_w_Parcels(newest_download_path, processing_FGDB_path, parcel
 def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN):
     """
     PARAMETERS:
-      orig_fc (str):
-      working_fc (str):
-      parcels_fc (str):
-      match_report_to_APN (str):
+      orig_fc (str):  Full path to the originally downloaded AGOL FC
+
+      working_fc (str):  Full path to the working FC that has the duplicate
+        generated reports on the stacked parcels.  This is the FC that we will
+        keep, nullify, or delete the duplicate reports.
+
+      parcels_fc (str):  Full path to the parcels FC that we will use to determine
+        if a report is on a stacked parcel.
+
+      match_report_to_APN (str):  Full path to the CSV file that contains
+        Report Numbers and APNs that should be associated with each other.
 
     RETURNS:
       None
-    FUNCTION:
 
+    FUNCTION:
+      To programatically decide if a report that is on a stacked parcel should:
+        1) To be kept as is.
+        2) To have its APN information nullified.
+        3) To be deleted.
+      Then carrying out the nullification and deleting of the features.
+
+      Stacked parcels are when there are multiple parcels on one parcel footprint.
+      i.e. Condos are separate APN's but they are on one parcel footprint.
+      If a report is placed on a stacked parcel, the join operation performed
+      above will create a duplicate report for each APN on that stacked parcel.
+      This is usually incorrect.  Usually, one report should be associated with one
+      APN.  This function goes through the CSV at 'match_report_to_APN' and creates
+      pairs of Report Number and the APN that the report should be associated with.
+
+      The script will then keep the feature in 'working_fc' that has the correct
+      Report Number and APN combo.  It will then set all the other features
+      created by the spatial join to 'Delete' in field [APN_8].
+
+      If the script encounters a report on a stacked parcel that does not have
+      a record in the 'match_report_to_APN', then this script will set 'Nullify'
+      in field [APN_8] for the first feature with that Record Number.
+      For all subsequent features, this function will set their attribute to
+      'Delete' in [APN_8].
+      This will ensure that even if a report does not have any information as to
+      which APN the report is associated with, we will not lose that report
+      in the production database.  But we do not want to have any PARCELS_ALL
+      attribute information for that record either since we do not know which
+      parcel it should be associated with.
+
+      Once the script has either left a feature alone (if it was in the CSV file
+      and had a correct Report Number and APN combo), or it marked the feature
+      as 'Nullify' or 'Delete', we will now either nullify all the tabular info
+      obtained from PARCELS_ALL from the spatial join, or we will delete that
+      feature.
     """
 
     print '--------------------------------------------------------------------'
     print 'Starting Handle_Stacked_Parcels()'
+    print '  Original FC at:\n    {}'.format(orig_fc)
     print '  Working FC at:\n    {}'.format(working_fc)
-    # TODO: Figure out how to handle if a report is in the CSV file for more than one APN
-    # TODO: Edit comments
-    # TODO: Document this function
+    print '  Parcel FC at:\n    {}'.format(parcels_fc)
+    print '  CSV used to match Report Numbers and APNs at:\n    {}\n'.format(match_report_to_APN)
 
     import csv
 
@@ -687,7 +775,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
 
     #---------------------------------------------------------------------------
     # Get list of Report Numbers / APN pairs from the CSV file
-    print '\n  Creating Report Number and APN lists from CSV at:\n    {}'.format(match_report_to_APN)
+    ##print '\n  Creating Report Number and APN lists from CSV at:\n    {}'.format(match_report_to_APN)
     with open (match_report_to_APN) as csv_file:
         readCSV = csv.reader(csv_file, delimiter = ',')
 
