@@ -23,7 +23,7 @@ def main():
     #---------------------------------------------------------------------------
 
     # Name of this script
-    name_of_script = 'Download_DA_Fire_Attachments.py'
+    name_of_script = 'DA_Downloade_Fire_Attachments.py'
 
     # Set the path prefix depending on if this script is called manually by a
     #  user running a Batch file, or called by a scheduled task on ATLANTIC server,
@@ -49,7 +49,7 @@ def main():
     # Full path to a text file that has the username and password of an account
     #  that has access to at least VIEW the FS in AGOL, as well as an email
     #  account that has access to send emails.
-    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\config_file.ini".format(path_prefix)
+    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Download_and_Process.ini".format(path_prefix)
     if os.path.isfile(cfgFile):
         config = ConfigParser.ConfigParser()
         config.read(cfgFile)
@@ -57,16 +57,17 @@ def main():
         print("INI file not found. \nMake sure a valid '.ini' file exists at {}.".format(cfgFile))
         sys.exit()
 
-    # Set the log file variables
-    log_file = r'{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Logs\{}'.format(path_prefix, name_of_script)
+    # Set the log file paths
+    log_file_folder = config.get('Download_Info', 'Log_File_Folder')
+    log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
 
     # Set the data paths
-    attachments_folder = r'{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Attachments'.format(path_prefix)
+    attachments_folder = config.get('Download_Info', 'Attachment_Folder')
 
     # Get list of Feature Service Names and find the FS that has the attachments
-    FS_names       = config.get('Download_Info', 'FS_names')
-    FS_names_ls    = FS_names.split(', ')
-    FS_index_in_ls = 0  # This index is the position of the FS with the attachments in the FS_names_ls list in the config file (NOT the index of the data in AGOL)
+    FS_name       = config.get('Download_Info', 'FS_name')
+##    FS_names_ls    = FS_names.split(', ')
+##    FS_index_in_ls = 0  # This index is the position of the FS with the attachments in the FS_names_ls list in the config file (NOT the index of the data in AGOL)
 
     # Set the Email variables
     ##email_admin_ls = ['michael.grue@sdcounty.ca.gov', 'randy.yakos@sdcounty.ca.gov', 'gary.ross@sdcounty.ca.gov']
@@ -82,15 +83,16 @@ def main():
     #---------------------------------------------------------------------------
     #                          Start Calling Functions
 
-    # See if this program should be run
-    now = datetime.datetime.now()
-    day_of_week = now.strftime('%A')
-
-    if day_of_week not in days_to_run:
-        print 'This script is not programmed to run today.  It runs on:'
-        for day in days_to_run:
-            print '  {}'.format(day)
-        sys.exit(0)
+##    # See if this program should be run
+##    now = datetime.datetime.now()
+##    day_of_week = now.strftime('%A')
+##
+##    # If today is not in the days_to_run list, then don't continue the script
+##    if day_of_week not in days_to_run:
+##        print 'This script is not programmed to run today.  It runs on:'
+##        for day in days_to_run:
+##            print '  {}'.format(day)
+##        sys.exit(0)
 
     # Turn all 'print' statements into a log-writing object
     if success == True:
@@ -101,27 +103,27 @@ def main():
             print '*** ERROR with Write_Print_To_Log() ***'
             print str(e)
 
-    # Get the dates to search from/to
-    if get_dates == 'Manually':
-##        from_date = raw_input('What day do you want to start getting attachments? (YYYY-MM-DD)\n  Attachments from this date will be included in the results.')
-##        to_date   = raw_input('What day do you want to stop getting attachments? (YYYY-MM-DD)\n  Attachments from this date will NOT be included in the results.')
+##    # Get the dates to search from/to
+##    if get_dates == 'Manually':
+####        from_date = raw_input('What day do you want to start getting attachments? (YYYY-MM-DD)\n  Attachments from this date will be included in the results.')
+####        to_date   = raw_input('What day do you want to stop getting attachments? (YYYY-MM-DD)\n  Attachments from this date will NOT be included in the results.')
+##
+##        from_date = '2017-12-01'
+##        to_date   = '2018-01-20'
+##
+##    if get_dates == 'Automatically':
+##        now = datetime.datetime.now()
+##        from_date = (now - datetime.timedelta(days=7)).strftime('%Y-%m-%d') # Grab photos taken one week ago
+##        to_date   = (now + datetime.timedelta(days=2)).strftime('%Y-%m-%d') # Make sure to grab all of the photos up to the current time (even those submitted late yesterday)
+##
+##        # If run by scheduled task (i.e. Automatically), create a weekly folder to d/l the attachments into
+##        attachments_folder = os.path.join(attachments_folder, '{}__{}'.format(from_date, to_date))
+##        if os.path.exists(attachments_folder):
+##            shutil.rmtree(attachments_folder)
+##        os.mkdir(attachments_folder)
 
-        from_date = '2017-12-01'
-        to_date   = '2018-01-20'
-
-    if get_dates == 'Automatically':
-        now = datetime.datetime.now()
-        from_date = (now - datetime.timedelta(days=7)).strftime('%Y-%m-%d') # Grab photos taken one week ago
-        to_date   = (now + datetime.timedelta(days=2)).strftime('%Y-%m-%d') # Make sure to grab all of the photos up to the current time (even those submitted late yesterday)
-
-        # If run by scheduled task (i.e. Automatically), create a weekly folder to d/l the attachments into
-        attachments_folder = os.path.join(attachments_folder, '{}__{}'.format(from_date, to_date))
-        if os.path.exists(attachments_folder):
-            shutil.rmtree(attachments_folder)
-        os.mkdir(attachments_folder)
-
-    print 'Got Dates: {}'.format(get_dates)
-    print 'from_date: {}\n  to_date: {}\n'.format(from_date, to_date)
+##    print 'Got Dates: {}'.format(get_dates)
+##    print 'from_date: {}\n  to_date: {}\n'.format(from_date, to_date)
 
     # Get a token with permissions to view the data
     if success == True:
@@ -135,11 +137,11 @@ def main():
     # Get Attachments
     if success == True:
         # Set the full FS URL. "1vIhDJwtG5eNmiqX" is the CoSD portal server so it shouldn't change much.
-        FS_url  = r'https://services1.arcgis.com/1vIhDJwtG5eNmiqX/arcgis/rest/services/{}/FeatureServer'.format(FS_names_ls[FS_index_in_ls])
+        FS_url  = r'https://services1.arcgis.com/1vIhDJwtG5eNmiqX/arcgis/rest/services/{}/FeatureServer'.format(FS_name)
         gaURL = FS_url + '/CreateReplica?'  # Get Attachments URL
         ##print gaURL  # For testing purposes
 
-        num_downloaded = Get_Attachments(token, gaURL, attachments_folder, from_date, to_date)
+        num_downloaded = Get_Attachments(token, gaURL, attachments_folder)#, from_date, to_date)
 
     # Footer for log file
     finish_time_str = [datetime.datetime.now().strftime('%m/%d/%Y  %I:%M:%S %p')][0]
@@ -349,7 +351,7 @@ def Get_Token(cfgFile, gtURL="https://www.arcgis.com/sharing/rest/generateToken"
 # the downloaded attachment.
 
 #TODO: find a way to rotate the images clockwise 90-degrees
-def Get_Attachments(token, gaURL, gaFolder, from_date, to_date):
+def Get_Attachments(token, gaURL, gaFolder):#, from_date, to_date):
     """
     PARAMETERS:
         token (str):
@@ -373,12 +375,24 @@ def Get_Attachments(token, gaURL, gaFolder, from_date, to_date):
     """
 
     print '--------------------------------------------------------------------'
-    print 'Getting Attachments...'
+    print 'Starting Get_Attachments()'
 
     import time
+
     # Flag to set if Attachments were downloaded.  Set to 'True' if downloaded
     attachment_dl = False
     number_dl = 0
+
+    # Print the parameters
+    print '  gaURL:\n    {}'.format(gaURL)
+    print '  gaFolder:\n    {}'.format(gaFolder)
+
+    #---------------------------------------------------------------------------
+    # Get a list of all the files that end with '.jpg' in the attachment folder
+    import os
+    existing_attachments = filter(lambda x: (os.path.basename(x)).endswith('.jpg'), os.listdir(gaFolder))
+    ##print existing_attachments
+
     #---------------------------------------------------------------------------
     #                       Get the attachments url (ga)
 
@@ -399,10 +413,10 @@ def Get_Attachments(token, gaURL, gaFolder, from_date, to_date):
     gaRequest = urllib2.Request(gaURL, gaData)
     gaResponse = urllib2.urlopen(gaRequest)
     gaJson = json.load(gaResponse)
-    print gaJson
+    ##print gaJson
     try:
         replicaUrl = gaJson['URL']
-        print '  Replica URL: %s' % str(replicaUrl)  # For testing purposes
+        ##print '  Replica URL: %s' % str(replicaUrl)  # For testing purposes
     except KeyError:
         print '** WARNING!  There was a KeyError.'
         print '  "URL" not found, either:'
@@ -430,7 +444,7 @@ def Get_Attachments(token, gaURL, gaFolder, from_date, to_date):
     # Allow the script to access the saved JSON file
     cwd = os.getcwd()  # Get the current working directory
     jsonFilePath = cwd + '\\' + JsonFileName # Path to the downloaded json file
-    print '  Temp JSON file saved to: ' + jsonFilePath
+    ##print '  Temp JSON file saved to: ' + jsonFilePath
 
     #---------------------------------------------------------------------------
     #                       Save the attachments
@@ -443,9 +457,9 @@ def Get_Attachments(token, gaURL, gaFolder, from_date, to_date):
     with open (jsonFilePath) as data_file:
         data = json.load(data_file)
 
-    # Get time objects to compare
-    from_date_dtobj = time.strptime(from_date, '%Y-%m-%d')
-    to_date_dtobj   = time.strptime(to_date, '%Y-%m-%d')
+##    # Get time objects to compare
+##    from_date_dtobj = time.strptime(from_date, '%Y-%m-%d')
+##    to_date_dtobj   = time.strptime(to_date, '%Y-%m-%d')
 
     # Check to make sure that the 'attachments' key exists
     try:
@@ -464,7 +478,7 @@ def Get_Attachments(token, gaURL, gaFolder, from_date, to_date):
         # Save the attachments
         # Loop through each 'attachment' and get its parentGlobalId so we can name
         #  it based on its corresponding feature
-        print '  Attempting to save attachments to: {}'.format(gaFolder)
+        print '\n  Attempting to save attachments to: {}\n'.format(gaFolder)
 
         for attachment in data['layers'][0]['attachments']:
             parent_ID = attachment['parentGlobalId']
@@ -475,19 +489,20 @@ def Get_Attachments(token, gaURL, gaFolder, from_date, to_date):
             for feature in data['layers'][0]['features']:
                 global_ID     = feature['attributes']['globalid']
                 report_number   = feature['attributes']['ReportNumber']
-                date_of_visit = feature['attributes']['DateSurveyStarted']
+##                date_of_visit = feature['attributes']['DateSurveyStarted']
                 if global_ID == parent_ID:
                     break
 
-            # Only Download if the date_of_visit is between the from_date and the to_date
-            if time.localtime(date_of_visit/1000) > from_date_dtobj and time.localtime(date_of_visit/1000) < to_date_dtobj:
+##            # Only Download if the date_of_visit is between the from_date and the to_date
+##            if time.localtime(date_of_visit/1000) > from_date_dtobj and time.localtime(date_of_visit/1000) < to_date_dtobj:
 
-                # Format the attach_name
-                remove_jpg_from_name = pic_name.split('.')[0]  # Strip the '.jpg' from the name
-                pic_letter = remove_jpg_from_name.split('-')[0]  # Get the letter of the picture (this letter matches to the Visits database)
-                attach_name = 'DA_Fire_{}_{}.jpg'.format(report_number, pic_letter)
+            # Format the attach_name
+            remove_jpg_from_name = pic_name.split('.')[0]  # Strip the '.jpg' from the name
+            pic_letter = remove_jpg_from_name.split('-')[0]  # Get the letter of the picture (this letter matches to the Visits database)
+            attach_name = 'DA_Fire_{}_{}.jpg'.format(report_number, pic_letter)
 
-
+            # Save the attachment if it is not already in the attachment folder
+            if attach_name not in existing_attachments:
                 # Get the token to download the attachment
                 gaValues = {'token' : token }
                 gaData = urllib.urlencode(gaValues)
@@ -500,16 +515,19 @@ def Get_Attachments(token, gaURL, gaFolder, from_date, to_date):
                 attachment_dl = True
                 number_dl+=1
 
-    if (attachment_dl == False):
-        print '    No attachments saved this run.  OK if no attachments between From and To dates.'
+            else:
+                print '    {} is already in the attachment folder, did not save.'.format(attach_name)
 
-    print '  All attachments can be found at: %s' % gaFolder
+    if (attachment_dl == False):
+        print '\n  No attachments saved this run.  OK if no new attachments since last script run.'
+
+    print '\n  All attachments can be found at: %s' % gaFolder
 
     # Delete the JSON file since it is no longer needed.
-    print '  Deleting JSON file'
-##    os.remove(jsonFilePath)
+    ##print '  Deleting JSON file'
+    os.remove(jsonFilePath)
 
-    print 'Successfully got attachments.\n'
+    print 'Finished Get_Attachments()\n'
 
     return number_dl
 

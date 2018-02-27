@@ -93,10 +93,7 @@ End of script reporting
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 
-#TODO: comment Purpose above
-#TODO: add try/except and error handling to this script
 #TODO: test this script on the County network
-#TODO: test this script on appending to SDE FC instead of a FGDB
 
 import arcpy, sys, datetime, os, ConfigParser
 arcpy.env.overwriteOutput = True
@@ -185,7 +182,6 @@ def main():
     # Set the Survey123 Feature Service variables
     name_of_FS           = config.get('Download_Info', 'FS_name')
     index_of_layer_in_FS = config.get('Download_Info', 'FS_index')
-
 
     #---------------------------------------------------------------------------
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -292,6 +288,8 @@ def main():
     #---------------------------------------------------------------------------
     #                     Backup the production features
     #                     before attempting to change it
+    print 'Backup the production features\n'
+
     # Delete the features in the backup database
     if success == True:
         try:
@@ -316,6 +314,8 @@ def main():
     #---------------------------------------------------------------------------
     #                       Append newly processed data
     #                      into the production database
+    print 'Append newly processed data to the production database\n'
+
     # Delete the features in the prod database
     if success == True:
         try:
@@ -342,6 +342,7 @@ def main():
     # Get a token with permissions to view the AGOL data
     if success == True:
         try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             token = Get_Token(cfgFile)
         except Exception as e:
             success = False
@@ -704,7 +705,7 @@ def Join_2_FC_By_Spatial_Join(target_fc, join_fc, output_FGDB):
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                          Function Handle Stacked Parcels
-def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN):
+def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN_csv):
     """
     PARAMETERS:
       orig_fc (str):  Full path to the originally downloaded AGOL FC
@@ -716,7 +717,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
       parcels_fc (str):  Full path to the parcels FC that we will use to determine
         if a report is on a stacked parcel.
 
-      match_report_to_APN (str):  Full path to the CSV file that contains
+      match_report_to_APN_csv (str):  Full path to the CSV file that contains
         Report Numbers and APNs that should be associated with each other.
 
     RETURNS:
@@ -734,7 +735,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
       If a report is placed on a stacked parcel, the join operation performed
       above will create a duplicate report for each APN on that stacked parcel.
       This is usually incorrect.  Usually, one report should be associated with one
-      APN.  This function goes through the CSV at 'match_report_to_APN' and creates
+      APN.  This function goes through the CSV at 'match_report_to_APN_csv' and creates
       pairs of Report Number and the APN that the report should be associated with.
 
       The script will then keep the feature in 'working_fc' that has the correct
@@ -742,7 +743,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
       created by the spatial join to 'Delete' in field [APN_8].
 
       If the script encounters a report on a stacked parcel that does not have
-      a record in the 'match_report_to_APN', then this script will set 'Nullify'
+      a record in the 'match_report_to_APN_csv', then this script will set 'Nullify'
       in field [APN_8] for the first feature with that Record Number.
       For all subsequent features, this function will set their attribute to
       'Delete' in [APN_8].
@@ -764,7 +765,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
     print '  Original FC at:\n    {}'.format(orig_fc)
     print '  Working FC at:\n    {}'.format(working_fc)
     print '  Parcel FC at:\n    {}'.format(parcels_fc)
-    print '  CSV used to match Report Numbers and APNs at:\n    {}\n'.format(match_report_to_APN)
+    print '  CSV used to match Report Numbers and APNs at:\n    {}\n'.format(match_report_to_APN_csv)
 
     import csv
 
@@ -775,8 +776,8 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN)
 
     #---------------------------------------------------------------------------
     # Get list of Report Numbers / APN pairs from the CSV file
-    ##print '\n  Creating Report Number and APN lists from CSV at:\n    {}'.format(match_report_to_APN)
-    with open (match_report_to_APN) as csv_file:
+    ##print '\n  Creating Report Number and APN lists from CSV at:\n    {}'.format(match_report_to_APN_csv)
+    with open (match_report_to_APN_csv) as csv_file:
         readCSV = csv.reader(csv_file, delimiter = ',')
 
         # Create blank lists
@@ -1321,23 +1322,59 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
 def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract, match_Report_to_APN_csv):
     """
     PARAMETERS:
-      orig_fc (str):
+      orig_fc (str): Full path to the originally downloaded AGOL data.
 
-      working_fc (str):
+      working_fc (str): Full path to the working data that is being processed.
 
-      QA_QC_log_folder (str):
+      QA_QC_log_folder (str): Full path to the folder that should contain the
+        QA/QC log file.
 
-      dt_to_append (str):
+      dt_to_append (str): Date and time in string format 'YYYY_MM_DD__HH_MM_SS'
 
-      parcels_extract (str):
+      parcels_extract (str): Full path to the Parcel FC that represents parcels
+        that intersect one or more Damage Assessment reports.  This FC was
+        created by the Extract_Parcels() Function above.
 
-      match_Report_to_APN_csv (str):
+      match_report_to_APN_csv (str):  Full path to the CSV file that contains
+        Report Numbers and APNs that should be associated with each other.
+
 
     RETURNS:
       success (bool):
+        True if the function completed successfully,
+        False if the function had an error.
+        Most of this function is in a 'try/except'.  This means that if there
+        was an error in the 'try', the main() function wouldn't know that there
+        was ever an error.
+
+        This value is passed back to the main() function so that we can still
+        write the error to the main log file.
+
 
     FUNCTION:
+      To write logging information to a specifically formatted QA/QC log file
+      that is separate from the general log file.
 
+      This function creates and writes to a QA/QC log file in the 'QA_QC_log_folder'
+      After setting up a header for the QA/QC log file, this script:
+        1) Check to see if any features are not on a parcel
+        2) Check to see if any features are on a parcel but have no APN info
+        3) Check to see if there are any duplicates in [ReportNumber]
+        4) Check to see if any features have NULL in the field [ReportNumber]
+        5) Check to see if any features have NULL in [IncidentName]
+
+      Each check has a mini report of the results of the check, which features
+      failed the check (if any), who is responsible for editing the data, and
+      how they can edit the data to pass the QA/QC checks.
+
+      The final steps are to turn the print statement back into the general
+      log writing object.
+
+      If there is an error in this function, the error message will first be
+      written to the QA/QC log file, and then to the general log file.
+
+      The variable 'success' will be returned to the main() function so that if
+      there is an error, the script can handle the error.
     """
 
     print '--------------------------------------------------------------------'
@@ -1637,7 +1674,7 @@ def Delete_Features(in_fc):
     print '--------------------------------------------------------------------'
     print 'Starting Delete_Features()...'
 
-    print '  Deleting Features from: "{}"'.format(in_fc)
+    print '  From: {}'.format(in_fc)
 
     arcpy.DeleteFeatures_management(in_fc)
 
@@ -1752,15 +1789,38 @@ def Get_Token(cfgFile, gtURL="https://www.arcgis.com/sharing/rest/generateToken"
 def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
     """
     PARAMETERS:
-      name_of_FS (str):
-      index_of_layer_in_FS, token (str):
-      working_fc (str):
+      name_of_FS (str): The name of the Feature Service (do not include things
+        like "services1.arcgis.com/1vIhDJwtG5eNmiqX/ArcGIS/rest/services", just
+        the name is needed.  i.e. "DPW_WP_SITES_DEV_VIEW".
+
+      index_of_layer_in_FS (str or int): The index of the layer in the Feature Service.
+        This will frequently be 0, but it could be a higer number if the FS has
+        multiple layers in it.
+
+      token (str): A string 'password' from ArcGIS that will allow us to to access the
+        online database.  Obtained from the Get_Token() Function.
+
+      working_fc (str): Full path to the FC that contains the features you
+        want to use to get values from.
 
     RETURNS:
       None
 
     FUNCTION:
+      To update a Feature Service in AGOL (name_of_FS) at index (index_of_layer_in_FS)
+      based off of either fixed calculations (like for the Quantity field) or
+      based off of the values in the working_fc
 
+      This function updates that [Quantity] field to equal 1 for any features
+      in AGOL where that field equals NULL.
+
+      It then updates the [EstimatedReplacementCost] field in AGOL based off
+      of the value in that field in the working_fc.  We already calculated
+      the Estimated Replacement Cost in the Fields_Calculate_Fields() function
+      above, and we can now update AGOL features to match those calculations.
+
+      If there is a value in [EstimatedReplacementCost] in AGOL, we will not
+      perform a calculation for that feature.
     """
 
     print '--------------------------------------------------------------------'
@@ -1782,10 +1842,14 @@ def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
         AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
 
     #---------------------------------------------------------------------------
-    #           Update (in AGOL) NULL [EstimatedReplacementCost]
-    #                to equal (in working database) [EstimatedReplacementCost]
+    #              Update (in AGOL) features with NULL
+    #              in field [EstimatedReplacementCost]
+    #         to equal the [EstimatedReplacementCost] value
+    #             for that feature in the working_fc
+
     # Make a cursor that only looks at reports with an Estimated Replacement Cost
     print '\n  Updating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
+    print '  working_fc:\n    {}'.format(working_fc)
     fields = ['EstimatedReplacementCost', 'ReportNumber']
     cur_where_clause = "EstimatedReplacementCost IS NOT NULL"
     print '    Cursor Where Clause: "{}"'.format(cur_where_clause)
@@ -1894,7 +1958,7 @@ def AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_u
       name_of_FS (str): The name of the Feature Service (do not include things
         like "services1.arcgis.com/1vIhDJwtG5eNmiqX/ArcGIS/rest/services", just
         the name is needed.  i.e. "DPW_WP_SITES_DEV_VIEW".
-      index_of_layer_in_FS (int): The index of the layer in the Feature Service.
+      index_of_layer_in_FS (str or int): The index of the layer in the Feature Service.
         This will frequently be 0, but it could be a higer number if the FS has
         multiple layers in it.
       object_id (str or int): OBJECTID that should be updated.
