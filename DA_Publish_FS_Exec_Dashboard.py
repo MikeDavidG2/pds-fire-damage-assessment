@@ -38,7 +38,9 @@ if os.path.isfile(cfgFile):
     config = ConfigParser.ConfigParser()
     config.read(cfgFile)
 else:
-    print("INI file not found. \nMake sure a valid '.ini' file exists at {}.".format(cfgFile))
+    print("*** ERROR! cannot find valid INI file ***\nMake sure a valid INI file exists at:\n\n{}\n".format(cfgFile))
+    print 'You may have to change the name/location of the INI file,\nOR change the variable in the script.'
+    raw_input('\nPress ENTER to end script...')
     sys.exit()
 
 # Log file is a concatenation of the config file path to the log folder and the name of the script (w/o the .py)

@@ -1,7 +1,37 @@
 #-------------------------------------------------------------------------------
 # Purpose:
 """
-To download the attachments in a Feature Service
+To download the attachments in a Feature Service.
+
+This script will:
+    1) Create and write to a log file.
+    2) Get a token that gives permission to view the AGOL data.
+    3) Download the attachments.
+
+NOTE: The CreateReplica URL used in this script gets a replica of the full
+  database, this means that even if the Feature Service is set to return 1,000
+  features, this script should still download attachments from features >1,000.
+
+Set the following variables in the script:
+    name_of_script
+    attachment_name_prefix
+    use_field_to_name_attachment
+    email_admin_ls
+    cfgFile
+
+Set the following variables in the cfgFile:
+    [Download_Info]
+    Log_File_Folder
+    Attachment_Folder
+    FS_name
+
+    [AGOL]
+    usr (for an AGOL account with permission to access the FS_name)
+    pwd (for an AGOL account with permission to access the FS_name)
+
+    [email]
+    usr (for an email account)
+    pwd (for an email account)
 """
 #
 # Author:      mgrue
@@ -13,7 +43,7 @@ To download the attachments in a Feature Service
 
 # TODO: Update the script Purpose above to be more accurate.
 
-import arcpy, sys, datetime, os, ConfigParser, urllib, urllib2, json, shutil
+import arcpy, sys, datetime, os, ConfigParser
 arcpy.env.overwriteOutput = True
 
 def main():
@@ -23,8 +53,27 @@ def main():
     #---------------------------------------------------------------------------
 
     # Name of this script
-    name_of_script = 'DA_Downloade_Fire_Attachments.py'
+    name_of_script = 'DA_Download_Fire_Attachments.py'
 
+    #---------------------------------------------------------------------------
+    #              The below 2 variables help to control the
+    #             naming schema for the downloaded attachments
+
+    # Set the prefix of the name of the downloaded attachments
+    # For example 'DA_Fire'
+    attachment_name_prefix = 'DA_Fire'
+
+    # Set the field name of the field that should be used for the main name
+    # of the downloaded attachment.
+    # This is usually a field that stores a unique value
+    # like: Report Number, Sample Event ID
+    # This is NOT an ESRI generated ID like Global ID
+    use_field_to_name_attachment = 'ReportNumber'
+
+    # Set the Email variables
+    ##email_admin_ls = ['michael.grue@sdcounty.ca.gov', 'randy.yakos@sdcounty.ca.gov', 'gary.ross@sdcounty.ca.gov']
+    email_admin_ls = ['michael.grue@sdcounty.ca.gov']  # For testing purposes
+    #---------------------------------------------------------------------------
     # Set the path prefix depending on if this script is called manually by a
     #  user running a Batch file, or called by a scheduled task on ATLANTIC server,
     #  or run directly through an IDE.
@@ -32,46 +81,42 @@ def main():
 
     if called_by == 'MANUAL':
         path_prefix = 'P:'
-        get_dates = 'Manually'
-        days_to_run = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
     elif called_by == 'SCHEDULED':
         path_prefix = 'P:'
-        get_dates = 'Automatically'
-        days_to_run = ['Saturday']  # Only run this script via SCHEDULED task once per week
 
-    else:  # If script run directly
+    else:  # If script run directly in an IDE
         path_prefix = 'P:'
-        get_dates = 'Manually'
-        days_to_run = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
-    #---------------------------------------------------------------------------
     # Full path to a text file that has the username and password of an account
     #  that has access to at least VIEW the FS in AGOL, as well as an email
     #  account that has access to send emails.
     cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Download_and_Process.ini".format(path_prefix)
+
+    #---------------------------------------------------------------------------
+    # Set variables from the cfgFile
     if os.path.isfile(cfgFile):
         config = ConfigParser.ConfigParser()
         config.read(cfgFile)
     else:
-        print("INI file not found. \nMake sure a valid '.ini' file exists at {}.".format(cfgFile))
+        print("*** ERROR! cannot find valid INI file ***\nMake sure a valid INI file exists at:\n\n{}\n".format(cfgFile))
+        print 'You may have to change the name/location of the INI file,\nOR change the variable in the script.'
+        raw_input('\nPress ENTER to end script...')
         sys.exit()
 
     # Set the log file paths
-    log_file_folder = config.get('Download_Info', 'Log_File_Folder')
-    log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
+    Log_File_Folder = config.get('Download_Info', 'Log_File_Folder')
+    log_file = r'{}\{}'.format(Log_File_Folder, name_of_script.split('.')[0])
 
     # Set the data paths
-    attachments_folder = config.get('Download_Info', 'Attachment_Folder')
+    Attachment_Folder = config.get('Download_Info', 'Attachment_Folder')
 
-    # Get list of Feature Service Names and find the FS that has the attachments
+    # Get the Feature Service Name that holds the Attachments
     FS_name       = config.get('Download_Info', 'FS_name')
-##    FS_names_ls    = FS_names.split(', ')
-##    FS_index_in_ls = 0  # This index is the position of the FS with the attachments in the FS_names_ls list in the config file (NOT the index of the data in AGOL)
 
-    # Set the Email variables
-    ##email_admin_ls = ['michael.grue@sdcounty.ca.gov', 'randy.yakos@sdcounty.ca.gov', 'gary.ross@sdcounty.ca.gov']
-    email_admin_ls = ['michael.grue@sdcounty.ca.gov']  # For testing purposes
+    # Set the Get Attachments URL
+    gaURL  = r'https://services1.arcgis.com/1vIhDJwtG5eNmiqX/arcgis/rest/services/{}/FeatureServer/CreateReplica?'.format(FS_name)
+
     #---------------------------------------------------------------------------
     #                Set Variables that will probably not change
 
@@ -83,17 +128,6 @@ def main():
     #---------------------------------------------------------------------------
     #                          Start Calling Functions
 
-##    # See if this program should be run
-##    now = datetime.datetime.now()
-##    day_of_week = now.strftime('%A')
-##
-##    # If today is not in the days_to_run list, then don't continue the script
-##    if day_of_week not in days_to_run:
-##        print 'This script is not programmed to run today.  It runs on:'
-##        for day in days_to_run:
-##            print '  {}'.format(day)
-##        sys.exit(0)
-
     # Turn all 'print' statements into a log-writing object
     if success == True:
         try:
@@ -102,28 +136,6 @@ def main():
             success = False
             print '*** ERROR with Write_Print_To_Log() ***'
             print str(e)
-
-##    # Get the dates to search from/to
-##    if get_dates == 'Manually':
-####        from_date = raw_input('What day do you want to start getting attachments? (YYYY-MM-DD)\n  Attachments from this date will be included in the results.')
-####        to_date   = raw_input('What day do you want to stop getting attachments? (YYYY-MM-DD)\n  Attachments from this date will NOT be included in the results.')
-##
-##        from_date = '2017-12-01'
-##        to_date   = '2018-01-20'
-##
-##    if get_dates == 'Automatically':
-##        now = datetime.datetime.now()
-##        from_date = (now - datetime.timedelta(days=7)).strftime('%Y-%m-%d') # Grab photos taken one week ago
-##        to_date   = (now + datetime.timedelta(days=2)).strftime('%Y-%m-%d') # Make sure to grab all of the photos up to the current time (even those submitted late yesterday)
-##
-##        # If run by scheduled task (i.e. Automatically), create a weekly folder to d/l the attachments into
-##        attachments_folder = os.path.join(attachments_folder, '{}__{}'.format(from_date, to_date))
-##        if os.path.exists(attachments_folder):
-##            shutil.rmtree(attachments_folder)
-##        os.mkdir(attachments_folder)
-
-##    print 'Got Dates: {}'.format(get_dates)
-##    print 'from_date: {}\n  to_date: {}\n'.format(from_date, to_date)
 
     # Get a token with permissions to view the data
     if success == True:
@@ -136,13 +148,14 @@ def main():
 
     # Get Attachments
     if success == True:
-        # Set the full FS URL. "1vIhDJwtG5eNmiqX" is the CoSD portal server so it shouldn't change much.
-        FS_url  = r'https://services1.arcgis.com/1vIhDJwtG5eNmiqX/arcgis/rest/services/{}/FeatureServer'.format(FS_name)
-        gaURL = FS_url + '/CreateReplica?'  # Get Attachments URL
-        ##print gaURL  # For testing purposes
+        try:
+            num_downloaded, success = Get_Attachments(token, gaURL, Attachment_Folder, attachment_name_prefix, use_field_to_name_attachment)
+        except Exception as e:
+            success = False
+            print '*** ERROR with Get_Attachments() ***'
+            print str(e)
 
-        num_downloaded = Get_Attachments(token, gaURL, attachments_folder)#, from_date, to_date)
-
+    #---------------------------------------------------------------------------
     # Footer for log file
     finish_time_str = [datetime.datetime.now().strftime('%m/%d/%Y  %I:%M:%S %p')][0]
     print '\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
@@ -159,21 +172,21 @@ def main():
     if success == True:
         subj = 'SUCCESS running {}'.format(name_of_script)
         body = """Success<br>
-        There were <b>{}</b> downloaded attachments.
-        The Log file name is: {}<br><br>
-        The Attachment folder is named: {}<br><br>
+        There were <b>{}</b> downloaded attachments.<br><br>
+        The Log file is at:<br> {}<br><br>
+        The Attachment folder is at:<br> {}<br><br>
         Attachments are named <i>Site_XX_YYYYMMDD_nnnnnn_pic_X.jpg</i><br>
         Where 'nnnnnn' is a unique ID (frequently HHMMSS, but could be a random unique ID.<br>
-        'pic_X' is the name of the field the picture belongs to.""".format(num_downloaded, os.path.basename(log_file_date), os.path.basename(attachments_folder))
+        'pic_X' is the name of the field in the database where the picture was stored.""".format(num_downloaded, log_file_date, Attachment_Folder)
 
     else:
         subj = 'ERROR running {}'.format(name_of_script)
         body = """There was an error with this script.<br>
         Please see the log file for more info.<br>
-        The Log file name is: {}<br><br>
+        The Log file is at:<br> {}<br><br>
         Attachments named Site_XX_YYYYMMDD_nnnnnn_pic_X.jpg<br>
         'nnnnnn' is a unique ID (frequently HHMMSS, but could be a random unique ID depending on the device).<br>
-        'pic_X' is the name of the field the picture belongs to.""".format(os.path.basename(log_file_date))
+        'pic_X' is the name of the field the picture belongs to.""".format(log_file_date)
 
     Email_W_Body(subj, body, email_admin_ls, cfgFile)
 
@@ -343,41 +356,62 @@ def Get_Token(cfgFile, gtURL="https://www.arcgis.com/sharing/rest/generateToken"
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                         FUNCTION:   Get Attachments
-# Attachments (images) are obtained by hitting the REST endpoint of the feature
-# service (gaURL) and returning a URL that downloads a JSON file (which is a
-# replica of the database).  The script then uses that downloaded JSON file to
-# get the URL of the actual images.  The JSON file is then used to get the
-# StationID and SampleEventID of the related feature so they can be used to name
-# the downloaded attachment.
+
 
 #TODO: find a way to rotate the images clockwise 90-degrees
-def Get_Attachments(token, gaURL, gaFolder):#, from_date, to_date):
+def Get_Attachments(token, gaURL, gaFolder, attachment_name_prefix, use_field_to_name_attachment):
     """
     PARAMETERS:
-        token (str):
-            The string token obtained in FUNCTION Get_Token().
-        gaURL (str):  URL
-        wkgFolder (str):
-            The variable set in FUNCTION main() which is a path to our working
-            folder.
-        dt_to_append (str):
-            The date and time string returned by FUNCTION Get_DateAndTime().
-        from_date (str):
+        token (str): The string token obtained in FUNCTION Get_Token().
 
-        to_date (str):
+        gaURL (str): URL of the CreateReplica end point for the AGOL Feature
+          Service we want to download attachments.
+
+        gaFolder (str): Full path to the folder that will hold the downloaded
+          attachments.
+
+        attachment_name_prefix (str): The prefix that should be added to every
+          downloaded attachment.  I.e. 'DA_Fire'
+
+        use_field_to_name_attachment (str): The field name of the field that
+          should be used to find a value for the main name of each downloaded
+          attachment.
+          This is usually a field that stores a unique value like:
+            Report Number, Sample Event ID, etc.
+          This is NOT an ESRI generated ID like Global ID
 
     RETURNS:
-        gaFolder (str): Path to the folder to contain the downloaded images
+      number_dl (int): Count of the number of attachments that were downloaded
+        during this run of the script.
+
+      success (bool): Flag to verify if this function ran successfully or if
+        there were errors.  True if successful, False if there were errros.
+
 
     FUNCTION:
       Gets the attachments (images) that are related to the database features and
       stores them as .jpg in a local file inside the gaFolder.
+
+      1) Attachments (images) are obtained by hitting the REST endpoint of the
+         feature service (gaURL) and returning a URL that downloads a JSON file
+         (which is a replica of the database).
+      2) The script then uses that downloaded JSON file to get the URL of the
+         each image.
+      3) The JSON file is then used to get the unique name/id of the feature
+         so that the downloaded attachment can be named appropriately.
+
+      NOTE:
+        The naming schema will be:
+        <attachment_name_prefix>_<value in use_field_to_name_attachment for the feature linked to the attachment>_<attachment_name_suffix>
     """
 
     print '--------------------------------------------------------------------'
     print 'Starting Get_Attachments()'
 
-    import time
+    import time, urllib, urllib2, json, os
+
+    # Flag to control if this entire function ran successfully
+    success = True
 
     # Flag to set if Attachments were downloaded.  Set to 'True' if downloaded
     attachment_dl = False
@@ -389,17 +423,19 @@ def Get_Attachments(token, gaURL, gaFolder):#, from_date, to_date):
 
     #---------------------------------------------------------------------------
     # Get a list of all the files that end with '.jpg' in the attachment folder
-    import os
+    # These are the existing attachments, and do not need to be downloaded again
     existing_attachments = filter(lambda x: (os.path.basename(x)).endswith('.jpg'), os.listdir(gaFolder))
     ##print existing_attachments
 
     #---------------------------------------------------------------------------
-    #                       Get the attachments url (ga)
+    #              Create the replica and get the replica's URL
 
-    # Set the values in a dictionary
+    # Set the values used to create the replica in a dictionary
+    # It is possible that the 'layers' key may need to be changed if the layer
+    # in the AGOL Feature Service is not at the default index of 0.
     gaValues = {
     'f' : 'pjson',
-    'replicaName' : 'DA_Fire_Replica',
+    'replicaName' : 'Attachment_Replica',
     'layers' : '0',
     'geometryType' : 'esriGeometryPoint',
     'transportType' : 'esriTransportTypeUrl',
@@ -416,26 +452,35 @@ def Get_Attachments(token, gaURL, gaFolder):#, from_date, to_date):
     ##print gaJson
     try:
         replicaUrl = gaJson['URL']
-        ##print '  Replica URL: %s' % str(replicaUrl)  # For testing purposes
+        ##print '  Replica URL:\n    %s' % str(replicaUrl)  # For testing purposes
+
+    # If the key 'URL' doesn't exist in gaJson, print out the error message and
+    # provide a few of the most common reasons for this error.
     except KeyError:
-        print '** WARNING!  There was a KeyError.'
-        print '  "URL" not found, either:'
-        print '    1. Sync is not enabled'
+        success = False
+        print '\n** ERROR!  There was a KeyError. ***'
+        print '  Key "URL" not found, error message in gaJson:'
+        try:
+            print '    {}\n'.format(gaJson['error']['details'][0])
+        except:
+            print '    No error message in gaJson\n'
+        print '    Frequent reasons for a KeyError:'
+        print '    1. Sync is not enabled on the Feature Service'
         print '    2. Token doesn\'t have permission to view the data'
-        print '    3. The URL is pointing to a non-existing Feature Service:'
-        print '       Check the name of the FS (https://services1.arcgis.com/1vIhDJwtG5eNmiqX/arcgis/rest/services/<!NAME_OF_FEATURE_SERVICE_HERE!>/FeatureServer/CreateReplica?'
-        print '       "URL" = {}'.format(gaURL)
+        print '    3. The URL is pointing to an old/non-existing Feature Service:'
+        print '       Check the name of the FS.'
+        print '       For example:\n                 https://services1.arcgis.com/1vIhDJwtG5eNmiqX/arcgis/rest/services/<!NAME_OF_FEATURE_SERVICE_THAT_MAY_BE_INCORRECT!>/FeatureServer/CreateReplica?'
+        print '       "gaURL" = {}'.format(gaURL)
 
     # Set the token into the URL so it can be accessed
     replicaUrl_token = replicaUrl + '?token={}&f=json'.format(token)
-    print '  Replica URL Token: %s' % str(replicaUrl_token)  # For testing purposes
+    print '  Replica URL with Token:\n    %s' % str(replicaUrl_token)  # For testing purposes
 
     #---------------------------------------------------------------------------
     #                         Save the JSON file
-    # Access the URL and save the file to the current working directory named
-    # 'myLayer.json'.  This will be a temporary file and will be deleted
-
-    JsonFileName = 'Temp_JSON.json'
+    # Access the URL and save the file to the current working directory
+    # This will be a temporary file and will be deleted
+    JsonFileName = 'Temp_Attachment_JSON.json'
 
     # Save the file
     # NOTE: the file is saved to the 'current working directory' + 'JsonFileName'
@@ -457,22 +502,20 @@ def Get_Attachments(token, gaURL, gaFolder):#, from_date, to_date):
     with open (jsonFilePath) as data_file:
         data = json.load(data_file)
 
-##    # Get time objects to compare
-##    from_date_dtobj = time.strptime(from_date, '%Y-%m-%d')
-##    to_date_dtobj   = time.strptime(to_date, '%Y-%m-%d')
-
     # Check to make sure that the 'attachments' key exists
     try:
         save_attachments = True
         data['layers'][0]['attachments'][0]
     except KeyError:
         save_attachments = False
-        print '\n*** WARNING.  There were no attachments downloaded. There was a KeyError: ***'
+        success = False
+        print '\n*** ERROR!  There were no attachments downloaded. There was a KeyError: ***'
         print '  Are "Attachments" Enabled in the Feature Service on AGOL?  If not, enable them and run again.\n'
     except IndexError:
         save_attachments = False
         print '\n*** WARNING.  There were no attachments downloaded. There was an IndexError: ***'
-        print '  There are no attachments in the database.\n'
+        print '  There are no attachments in the database.'
+        print '  OK if this is a new database without any attachments.\n'
 
     if save_attachments == True:
         # Save the attachments
@@ -481,45 +524,50 @@ def Get_Attachments(token, gaURL, gaFolder):#, from_date, to_date):
         print '\n  Attempting to save attachments to: {}\n'.format(gaFolder)
 
         for attachment in data['layers'][0]['attachments']:
-            parent_ID = attachment['parentGlobalId']
-            pic_name = attachment['name']
+            parent_ID = attachment['parentGlobalId']# globalid of the feature that is linked to this attachment
 
-            # Now loop through all of the 'features' and break once the corresponding
-            #  GlobalId's match
+            # Find the field name that stores this attachment
+            pic_name  = attachment['name']
+            remove_jpg_from_name = pic_name.split('.')[0]  # Strip the '.jpg' from the pic_name
+            attachment_name_suffix = remove_jpg_from_name.split('-')[0]  # Get the field name that stores this picture in the AGOL database
+
+            # Now loop through all of the 'features' and break once the
+            # attachments 'parentGlobalId' and a features 'globalid' match
             for feature in data['layers'][0]['features']:
-                global_ID     = feature['attributes']['globalid']
-                report_number   = feature['attributes']['ReportNumber']
-##                date_of_visit = feature['attributes']['DateSurveyStarted']
+                global_ID            = feature['attributes']['globalid']
+                attachment_name_main = feature['attributes'][use_field_to_name_attachment]
                 if global_ID == parent_ID:
                     break
 
-##            # Only Download if the date_of_visit is between the from_date and the to_date
-##            if time.localtime(date_of_visit/1000) > from_date_dtobj and time.localtime(date_of_visit/1000) < to_date_dtobj:
-
             # Format the attach_name
-            remove_jpg_from_name = pic_name.split('.')[0]  # Strip the '.jpg' from the name
-            pic_letter = remove_jpg_from_name.split('-')[0]  # Get the letter of the picture (this letter matches to the Visits database)
-            attach_name = 'DA_Fire_{}_{}.jpg'.format(report_number, pic_letter)
+            # For example: 'DA_Fire_20180228.123456_pic_A.jpg'
+            #               '{pre}  _    {main}     _ {suffix}.jpg'
+            attach_name = '{}_{}_{}.jpg'.format(attachment_name_prefix, attachment_name_main, attachment_name_suffix)
 
             # Save the attachment if it is not already in the attachment folder
             if attach_name not in existing_attachments:
-                # Get the token to download the attachment
-                gaValues = {'token' : token }
-                gaData = urllib.urlencode(gaValues)
+                try:
+                    # Get the token to download the attachment
+                    gaValues = {'token' : token }
+                    gaData = urllib.urlencode(gaValues)
 
-                # Get the attachment and save as attachPath
-                attachmentUrl = attachment['url']
-                attach_path = os.path.join(gaFolder, attach_name)
-                print '    Saving {}'.format(attach_name)
-                urllib.urlretrieve(url=attachmentUrl, filename=attach_path,data=gaData)
-                attachment_dl = True
-                number_dl+=1
+                    # Get the attachment and save as attachPath
+                    attachmentUrl = attachment['url']
+                    attach_path = os.path.join(gaFolder, attach_name)
+                    print '    {} is being downloaded.'.format(attach_name)
+                    urllib.urlretrieve(url=attachmentUrl, filename=attach_path,data=gaData)
+                    attachment_dl = True
+                    number_dl+=1
+                except Exception as e:
+                    success = False
+                    print '\n*** ERROR! There was a problem with downloading {} ***'.format(attach_name)
+                    print '{}\n\n'.format(str(e))
 
             else:
                 print '    {} is already in the attachment folder, did not save.'.format(attach_name)
 
     if (attachment_dl == False):
-        print '\n  No attachments saved this run.  OK if no new attachments since last script run.'
+        print '\n  No attachments saved this run.\n  OK if no new attachments since last script run.'
 
     print '\n  All attachments can be found at: %s' % gaFolder
 
@@ -529,7 +577,7 @@ def Get_Attachments(token, gaURL, gaFolder):#, from_date, to_date):
 
     print 'Finished Get_Attachments()\n'
 
-    return number_dl
+    return number_dl, success
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------

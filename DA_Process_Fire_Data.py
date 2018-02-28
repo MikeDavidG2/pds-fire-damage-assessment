@@ -137,7 +137,9 @@ def main():
         config = ConfigParser.ConfigParser()
         config.read(cfgFile)
     else:
-        print("INI file not found. \nMake sure a valid '.ini' file exists at {}.".format(cfgFile))
+        print("*** ERROR! cannot find valid INI file ***\nMake sure a valid INI file exists at:\n\n{}\n".format(cfgFile))
+        print 'You may have to change the name/location of the INI file,\nOR change the variable in the script.'
+        raw_input('\nPress ENTER to end script...')
         sys.exit()
 
     # Set the working folder, FGDBs, FCs, and Tables
@@ -447,7 +449,7 @@ def Write_Print_To_Log(log_file, name_of_script):
     # Make the 'print' statement write to the log file
     print 'Find log file found at:\n  {}'.format(log_file_date)
     print '\nProcessing...\n'
-    sys.stdout = write_to_log
+##    sys.stdout = write_to_log
 
     # Header for log file
     start_time = datetime.datetime.now()
@@ -809,11 +811,11 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN_
 
             # Select by attribute the feature in orig_fc
             where_clause = "ReportNumber = '{}'".format(report_number)
-            ##print '  Searching where: {}'.format(where_clause)
+            print '  Searching where: {}'.format(where_clause)
             selected_orig = Select_By_Attribute(orig_fc, 'NEW_SELECTION', where_clause)
 
             # Select by location the parcels that intersect with the orig_fc point
-            ##print '  Selecting Parcels that intersect that report'
+            print '  Selecting Parcels that intersect that report'
             arcpy.MakeFeatureLayer_management(parcels_fc, 'par_lyr')
             arcpy.SelectLayerByLocation_management('par_lyr', 'INTERSECT', selected_orig)
 
@@ -1828,7 +1830,7 @@ def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
 
     #---------------------------------------------------------------------------
     #               Update (in AGOL) NULL [Quantity] to equal 1
-    print '\n  Updating (in AGOL) any records with a NULL [Quantity] to equal 1'
+    print '\n  1) Updating (in AGOL) any records with a NULL [Quantity] to equal 1'
 
     # Get list of Object IDs
     where_clause = "Quantity IS NULL"
@@ -1848,11 +1850,11 @@ def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
     #             for that feature in the working_fc
 
     # Make a cursor that only looks at reports with an Estimated Replacement Cost
-    print '\n  Updating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
+    print '\n  2) Updating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
     print '  working_fc:\n    {}'.format(working_fc)
     fields = ['EstimatedReplacementCost', 'ReportNumber']
     cur_where_clause = "EstimatedReplacementCost IS NOT NULL"
-    print '    Cursor Where Clause: "{}"'.format(cur_where_clause)
+    print '  Cursor Where Clause: "{}"'.format(cur_where_clause)
     with arcpy.da.SearchCursor(working_fc, fields, cur_where_clause) as cursor:
         for row in cursor:
             est_replcmt_cost = row[0]
@@ -1869,6 +1871,10 @@ def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
 
                 for object_id in obj_ids:
                     AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_update, new_value, token)
+
+            else:
+                print '  WARNING! There was more than 1 feature that satisfied the where clause: {}'.format(where_clause)
+                print '  The features on AGOL were not updated.'
 
     print 'Finished Update_AGOL_Fields()\n'
     return

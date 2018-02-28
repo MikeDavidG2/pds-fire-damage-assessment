@@ -96,7 +96,9 @@ def main():
             config = ConfigParser.ConfigParser()
             config.read(cfgFile)
         else:
-            print("INI file not found. \nMake sure a valid '.ini' file exists at {}.".format(cfgFile))
+            print("*** ERROR! cannot find valid INI file ***\nMake sure a valid INI file exists at:\n\n{}\n".format(cfgFile))
+            print 'You may have to change the name/location of the INI file,\nOR change the variable in the script.'
+            raw_input('\nPress ENTER to end script...')
             sys.exit()
 
         # FS_name is the name of the Feature Service (FS) with the layer you want
