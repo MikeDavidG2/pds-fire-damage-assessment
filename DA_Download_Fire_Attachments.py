@@ -198,7 +198,8 @@ def main():
         print 'Please see log file (noted above) for troubleshooting\n'
 
     if called_by == 'MANUAL':
-        raw_input('Press ENTER to continue')
+        ##raw_input('Press ENTER to continue')
+        pass
 
 #-------------------------------------------------------------------------------
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

@@ -204,6 +204,14 @@ def main():
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             orig_DA_reports_fc = Get_Newest_Data(raw_agol_FGDB_path)
+
+            # Add Attribute Index
+            try:
+                arcpy.AddIndex_management(orig_DA_reports_fc, ['ReportNumber'], 'orig_DA_index')
+                print 'Added index to: {}\n'.format(orig_DA_reports_fc)
+            except:
+                print 'Index not added.  It probably already exists\n'
+
         except Exception as e:
             success = False
             print '\n*** ERROR with Get_Newest_Data() ***'
@@ -226,6 +234,14 @@ def main():
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             Extract_Parcels(parcels_all, orig_DA_reports_fc, parcels_extract_path)
+
+            # Add Attribute Index
+            try:
+                arcpy.AddIndex_management(parcels_extract_path, ['APN', 'APN_8'], 'parcels_extract_index')
+                print 'Added index to: {}\n'.format(parcels_extract_path)
+            except:
+                print 'Index not added.  It probably already exists\n'
+
         except Exception as e:
             success = False
             print '\n*** ERROR with Extract_Parcels() ***'
@@ -237,6 +253,14 @@ def main():
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             working_fc = Join_2_FC_By_Spatial_Join(orig_DA_reports_fc, parcels_extract_path, processing_FGDB_path)
+
+            # Add Attribute Index
+            try:
+                arcpy.AddIndex_management(working_fc, ['ReportNumber', 'APN', 'APN_8'], 'working_fc_index')
+                print 'Added index to: {}\n'.format(working_fc)
+            except:
+                print 'Index not added.  It probably already exists\n'
+
         except Exception as e:
             success = False
             print '\n*** ERROR with Join_2_FC_By_Spatial_Join() ***'
@@ -290,13 +314,12 @@ def main():
     #---------------------------------------------------------------------------
     #                     Backup the production features
     #                     before attempting to change it
-    print 'Backup the production features\n'
-
     # Delete the features in the backup database
     if success == True:
         try:
             backup_fc = '{}_BAK'.format(prod_FC_path)
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            print 'Backup the production features\n'
             Delete_Features(backup_fc)
         except Exception as e:
             success = False
@@ -316,12 +339,11 @@ def main():
     #---------------------------------------------------------------------------
     #                       Append newly processed data
     #                      into the production database
-    print 'Append newly processed data to the production database\n'
-
     # Delete the features in the prod database
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            print 'Append newly processed data to the production database\n'
             Delete_Features(prod_FC_path)
         except Exception as e:
             success = False
@@ -449,7 +471,7 @@ def Write_Print_To_Log(log_file, name_of_script):
     # Make the 'print' statement write to the log file
     print 'Find log file found at:\n  {}'.format(log_file_date)
     print '\nProcessing...\n'
-##    sys.stdout = write_to_log
+    sys.stdout = write_to_log
 
     # Header for log file
     start_time = datetime.datetime.now()
@@ -771,6 +793,12 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN_
 
     import csv
 
+    arcpy.MakeFeatureLayer_management(orig_fc,    'orig_fc_lyr')
+    arcpy.MakeFeatureLayer_management(working_fc, 'working_fc_lyr')
+    arcpy.MakeFeatureLayer_management(parcels_fc, 'par_lyr')
+
+
+
     #---------------------------------------------------------------------------
     # List of fields that should not be attempted to be nullified
     ignore_fields = ['OBJECTID', 'Shape', 'Shape.area', 'Shape.len',
@@ -809,22 +837,27 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN_
         for orig_row in orig_cursor:
             report_number = orig_row[0]
 
-            # Select by attribute the feature in orig_fc
+            # Select by attribute the feature(s) in the working_fc that has the
+            # same Report Number as the orig_fc.  If there are more than 1
+            # record selected, then that report is on a stacked parcel
             where_clause = "ReportNumber = '{}'".format(report_number)
             print '  Searching where: {}'.format(where_clause)
-            selected_orig = Select_By_Attribute(orig_fc, 'NEW_SELECTION', where_clause)
-
-            # Select by location the parcels that intersect with the orig_fc point
-            print '  Selecting Parcels that intersect that report'
-            arcpy.MakeFeatureLayer_management(parcels_fc, 'par_lyr')
-            arcpy.SelectLayerByLocation_management('par_lyr', 'INTERSECT', selected_orig)
+            arcpy.SelectLayerByAttribute_management('working_fc_lyr', 'NEW_SELECTION', where_clause)
 
             # Get count of selected parcels
-            count_selected_parcels = Get_Count_Selected('par_lyr')
+            count_selected_features = Get_Count_Selected('working_fc_lyr')
 
-            if count_selected_parcels > 1:  # Then the report is on a stacked parcel
-                print '    Report Number: "{}" is on a stacked parcel (With "{}" APNs)'.format(report_number, count_selected_parcels)
+            if count_selected_features > 1:  # Then the report is on a stacked parcel
+                print '    Report Number: "{}" is on a stacked parcel (With "{}" APNs)'.format(report_number, count_selected_features)
 
+                # Select by attribute the feature in orig_fc
+                where_clause = "ReportNumber = '{}'".format(report_number)
+                print '  Searching where: {}'.format(where_clause)
+                arcpy.SelectLayerByAttribute_management('orig_fc_lyr', 'NEW_SELECTION', where_clause)
+
+                # Select by location the parcels that intersect with the orig_fc point
+                print '  Selecting Parcels that intersect that report'
+                arcpy.SelectLayerByLocation_management('par_lyr', 'INTERSECT', 'orig_fc_lyr')
                 #---------------------------------------------------------------
                 # Test to see if the report_number is in the CSV file that
                 # specifies which APN the point on a stacked parcel should be
@@ -841,8 +874,8 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN_
                     # Test to make sure that the Report Number / APN pair in the CSV
                     # exist in the working_fc
                     where_clause = "ReportNumber = '{}' and APN = '{}'".format(r_numbers_csv[csv_index], apns_csv[csv_index])
-                    lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
-                    count = Get_Count_Selected(lyr)
+                    arcpy.SelectLayerByAttribute_management('working_fc_lyr', 'NEW_SELECTION', where_clause)
+                    count = Get_Count_Selected('working_fc_lyr')
                     if count > 0:
                         report_in_csv = True
                         print '    Report / APN pair in CSV is found in working_fc'
@@ -956,9 +989,9 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN_
 
     # Select the features that should have their APN info nullified
     where_clause = "APN_8 = 'Nullify'"
-    f_to_nullify_APN_lyr = Select_By_Attribute(working_fc, 'NEW_SELECTION', where_clause)
+    arcpy.SelectLayerByAttribute_management('working_fc_lyr', 'NEW_SELECTION', where_clause)
 
-    count = Get_Count_Selected(f_to_nullify_APN_lyr)
+    count = Get_Count_Selected('working_fc_lyr')
 
     if count != 0:
         # Get list of field names in the parcels_fc
@@ -969,10 +1002,10 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN_
             if f_name not in ignore_fields:
                 expression = "None"
                 ##print '    Nullifying Field: {}'.format(f_name)
-                arcpy.CalculateField_management(f_to_nullify_APN_lyr, f_name, expression, 'PYTHON_9.3')
+                arcpy.CalculateField_management('working_fc_lyr', f_name, expression, 'PYTHON_9.3')
 
     else:
-        print '*** WARNING! There were no selected features with the above where clause ***'
+        print '  INFO: There were no selected features with the above where clause'
         print '  Nothing to be nullified\n'
 
     #---------------------------------------------------------------------------
@@ -992,7 +1025,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN_
         arcpy.DeleteFeatures_management(f_to_delete_lyr)
 
     else:
-        print '*** WARNING! There were no selected features with the above where clause ***'
+        print '  INFO: There were no selected features with the above where clause'
         print '  Nothing to be deleted\n'
 
     print 'Finished Handle_Stacked_Parcels()\n'

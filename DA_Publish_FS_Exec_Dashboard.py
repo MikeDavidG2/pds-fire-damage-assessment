@@ -1,7 +1,7 @@
 # Publish_DA_Exec_Dashboard_FS.py - update hosted feature services by replacing the .SD file
 #   and calling publishing (with overwrite) to update the feature service
 # Edits by Mike Grue are noted with <MG MM/DD/YY ... >
-# Requires a Configuration settings file (.ini) in the same directory as this script
+# Requires a Configuration settings file (.ini)
 # Downloaded the script from:  https://github.com/arcpy/update-hosted-feature-service
 
 import ConfigParser
@@ -668,4 +668,4 @@ if __name__ == "__main__":
     sys.stdout = orig_stdout
     print 'End of script'
 
-    raw_input('Press "ENTER" to continue...')
+##    raw_input('Press "ENTER" to continue...')
