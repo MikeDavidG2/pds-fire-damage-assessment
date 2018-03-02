@@ -170,6 +170,10 @@ def main():
 
     QA_QC_log_folder = config.get('Process_Info', 'QA_QC_Log_Folder')
 
+    # Set the path to the success/fail files
+    success_error_folder = config.get('Download_Info', 'Success_Error_Folder')
+    download_success_file = 'SUCCESS_running_DA_Download_Fire_Data.txt'  # Hard Coded into variable here
+    process_success_file  = 'SUCCESS_running_{}.txt'.format(name_of_script.split('.')[0])
 
     # Set the Control_Files path
     control_file_folder = config.get('Process_Info', 'Control_Files')
@@ -198,6 +202,25 @@ def main():
             success = False
             print '\n*** ERROR with Write_Print_To_Log() ***'
             print str(e)
+
+    # If this script was called with a batch file, make sure that the data
+    # was downloaded successfully before trying to process it.
+    if called_by != '':
+        print 'Checking to see if the AGOL data was downloaded successfully'
+
+        if os.path.exists('{}\{}'.format(success_error_folder, download_success_file)):
+            print '\nDA_Download_Fire_Data.py was run successfully, processing the data now'
+            sys.stdout.flush()
+        else:
+            success = False
+            print '\n*** ERROR! ***'
+            print '  This script is designed to process data that was downloaded by a previously run script: "DA_Download_Fire_Data.py"'
+            print '  If it was completed successfully, The "DA_Download_Fire_Data.py" script should have written a file named:\n    {}'.format(download_success_file)
+            print '  At:\n    {}'.format(success_error_folder)
+            print '\n  It appears that the above file does not exist, meaning that the Download script had an error.'
+            print '  This script will not run if there was an error in DA_Download_Fire_Data.py'
+            print '  Please first fix any problems with that script first.'
+            print '  You can find the log files at:\n    {}'.format(log_file_folder)
 
     # Get the path to the most recently downloaded data
     if success == True:
@@ -382,6 +405,27 @@ def main():
             success = False
             print '\n*** ERROR with Update_AGOL_Fields() ***'
             print str(e)
+
+    #---------------------------------------------------------------------------
+    # Write a file to disk to let other scripts know if this script ran
+    # successfully or not
+    try:
+        # Set a file_name depending on the 'success' variable.
+        if success == True:
+            file_name = 'SUCCESS_running_{}.txt'.format(name_of_script.split('.')[0])
+
+        else:
+            file_name = 'ERROR_running_{}.txt'.format(name_of_script.split('.')[0])
+
+        # Write the file
+        file_path = '{}\{}'.format(success_error_folder, file_name)
+        print '\nCreating file:\n  {}'.format(file_path)
+        open(file_path, 'w')
+
+    except Exception as e:
+        success = False
+        print '*** ERROR with Writing a Success or Fail file() ***'
+        print str(e)
 
     #---------------------------------------------------------------------------
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

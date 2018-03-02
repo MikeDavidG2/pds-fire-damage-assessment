@@ -53,7 +53,7 @@ Users set some variables in this script:
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 
-import arcpy, sys, datetime, os, ConfigParser, time
+import arcpy, sys, datetime, os, ConfigParser, time, shutil
 arcpy.env.overwriteOutput = True
 
 def main():
@@ -119,6 +119,9 @@ def main():
         # Set the log file path
         log_file = r'{}\{}'.format(config.get('Download_Info', 'Log_File_Folder'), name_of_script.split('.')[0])
 
+        # Set the path to the success/fail files
+        success_error_folder = config.get('Download_Info', 'Success_Error_Folder')
+
     except Exception as e:
         print '*** ERROR! There was a problem setting variables from the config file'
         print str(e)
@@ -178,12 +181,44 @@ def main():
 
         # Download the data
         try:
+            delete_me
             Get_AGOL_Data_All(AGOL_fields, token, FS_url, index_of_layer, wkg_folder, FGDB_name, FC_name_date)
-
         except Exception as e:
             success = False
             print '*** ERROR with Get_AGOL_Data_All() ***'
             print str(e)
+
+    #---------------------------------------------------------------------------
+    # Write a file to disk to let other scripts know if this script ran
+    # successfully or not
+    try:
+        # Delete the success_error_folder to remove any previously written files
+        if os.path.exists(success_error_folder):
+            print '\nDeleting the folder at:\n  {}'.format(success_error_folder)
+            shutil.rmtree(success_error_folder)
+            time.sleep(3)
+
+        # Create the empty success_error_folder
+        print '\nMaking a folder at:\n  {}'.format(success_error_folder)
+        os.mkdir(success_error_folder)
+
+        # Set a file_name depending on the 'success' variable.
+        if success == True:
+            file_name = 'SUCCESS_running_{}.txt'.format(name_of_script.split('.')[0])
+
+        else:
+            file_name = 'ERROR_running_{}.txt'.format(name_of_script.split('.')[0])
+
+        # Write the file
+        file_path = '{}\{}'.format(success_error_folder, file_name)
+        print '\nCreating file:\n  {}'.format(file_path)
+        open(file_path, 'w')
+
+    except Exception as e:
+        success = False
+        print '*** ERROR with Writing a Success or Fail file() ***'
+        print str(e)
+    #---------------------------------------------------------------------------
 
     # Footer for log file
     finish_time_str = [datetime.datetime.now().strftime('%m/%d/%Y  %I:%M:%S %p')][0]
