@@ -163,11 +163,13 @@ def main():
     # Set CSV that looks for Report Number / APN pairs (for stacked parcels)
     match_Report_to_APN_csv  = config.get('Process_Info', 'Report_to_APN_csv')
 
+    # Set info for the Excel Exports of the production database
+    excel_export_folder = config.get('Process_Info', 'excel_export_folder')
+    excel_file_name = 'DA_Current_Event'
 
     # Set the log file paths
     log_file_folder = config.get('Download_Info', 'Log_File_Folder')
     log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
-
     QA_QC_log_folder = config.get('Process_Info', 'QA_QC_Log_Folder')
 
     # Set the path to the success/fail files
@@ -206,10 +208,10 @@ def main():
     # If this script was called with a batch file, make sure that the data
     # was downloaded successfully before trying to process it.
     if called_by != '':
-        print 'Checking to see if the AGOL data was downloaded successfully'
+        print 'Checking to see if the AGOL data was downloaded successfully:'
 
         if os.path.exists('{}\{}'.format(success_error_folder, download_success_file)):
-            print '\nDA_Download_Fire_Data.py was run successfully, processing the data now'
+            print '\n  DA_Download_Fire_Data.py was run successfully, processing the data now\n'
             sys.stdout.flush()
         else:
             success = False
@@ -218,8 +220,8 @@ def main():
             print '  If it was completed successfully, The "DA_Download_Fire_Data.py" script should have written a file named:\n    {}'.format(download_success_file)
             print '  At:\n    {}'.format(success_error_folder)
             print '\n  It appears that the above file does not exist, meaning that the Download script had an error.'
-            print '  This script will not run if there was an error in DA_Download_Fire_Data.py'
-            print '  Please first fix any problems with that script first.'
+            print '  This script will not run if there was an error in "DA_Download_Fire_Data.py"'
+            print '  Please fix any problems with that script first. Then try again.'
             print '  You can find the log files at:\n    {}'.format(log_file_folder)
 
     # Get the path to the most recently downloaded data
@@ -381,6 +383,21 @@ def main():
         except Exception as e:
             success = False
             print '\n*** ERROR with Append_Data() ***'
+            print str(e)
+
+    #---------------------------------------------------------------------------
+    #              Export the updated prod database to an Excel file
+    # Delete the features in the prod database
+    if success == True:
+        try:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            fld_name_or_alias = 'ALIAS'
+            domain_cd_or_desc = 'DESCRIPTION'
+            Export_To_Excel(prod_FC_path, excel_export_folder, excel_file_name, dt_to_append, fld_name_or_alias, domain_cd_or_desc)
+
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Export_Excel() ***'
             print str(e)
 
     #---------------------------------------------------------------------------
@@ -1796,6 +1813,82 @@ def Append_Data(input_item, target, schema_type='NO_TEST', field_mapping=None):
     arcpy.Append_management(input_item, target, schema_type, field_mapping)
 
     print 'Finished Append_Data()\n'
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                        FUNCTION: Export Excel
+def Export_To_Excel(out_table, excel_export_folder, excel_file_name, dt_to_append='',
+                            fld_name_or_alias='NAME', domain_cd_or_desc='CODE'):
+    """
+    PARAMETERS:
+      out_table (str) = Full path to the FC or Table in a FGDB that you want to
+        export to an Excel file.
+
+      excel_export_folder (str) = Full path to the folder that should hold the
+        Excel file.
+
+      excel_file_name (str) = The base name you want to give to the Excel File
+
+      dt_to_append {str} = The date and time you want to append to the base name
+        set in the excel_file_name variable above. If you don't want to provide
+        a date and time, but want to set the other optional variables below,
+        enter '' for the dt_to_append when calling the function.
+        Optional.
+
+      fld_name_or_alias {str} = How column names in the output are determined.
+        Values:
+          NAME - Column headers will be set using the input's field names.
+                 This is the default.
+          ALIAS - Column headers will be set using the field aliases.
+        Optional.
+
+      domain_cd_or_desc {str} = Controls how the fields with domains are exported.
+        Values:
+          CODE - All field values will be exported as they are in the table.
+                 This is the default.
+          DESCRIPTION - For fields with a coded value domain, the coded value
+                 descriptions will be used.
+        Optional.
+
+    RETURNS:
+      None
+
+    FUNCTION:
+      To export a FC or a Table in a FGDB to an Excel file.
+    """
+    print '--------------------------------------------------------------------'
+    print 'Starting Export_To_Excel()'
+
+    import os, time
+
+    # Make the export folder if it doesn't exist
+    if not os.path.exists(excel_export_folder):
+        print '  Making folder at:\n    {}'.format(excel_export_folder)
+        os.mkdir(excel_export_folder)
+
+    # Format the path and name of the Excel file
+    if dt_to_append == '':
+        export_file = r'{}\{}.xls'.format(excel_export_folder, excel_file_name)
+    else:
+        export_file = r'{}\{}_{}.xls'.format(excel_export_folder, excel_file_name, dt_to_append)
+
+    # Print variables
+    print '  Exporting table to Excel...'
+    print '        From: ' + out_table
+    print '          To: ' + export_file
+    print '   Use Field: ' + fld_name_or_alias
+    print '  Use Domain: ' + domain_cd_or_desc
+
+    # Delete the Excel file if it exists (shouldn't happen if providing a dt_to_append)
+    if os.path.exists(export_file):
+        print '\n  That Excel file already exists, removing old file and replacing\n'
+        os.remove(export_file)
+        time.sleep(2)
+
+    # Export
+    arcpy.TableToExcel_conversion(out_table, export_file, fld_name_or_alias, domain_cd_or_desc)
+
+    print 'Finished Export_To_Excel()\n'
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------

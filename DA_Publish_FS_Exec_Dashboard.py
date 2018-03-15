@@ -31,8 +31,21 @@ import shutil
 # Name of this script
 name_of_script = 'DA_Publish_FS_Exec_Dashboard.py'
 
+# Set the path prefix depending on if this script is called manually by a
+#  user, or called by a scheduled task on ATLANTIC server.
+called_by = arcpy.GetParameterAsText(0)
+
+if called_by == 'MANUAL':
+    path_prefix = 'P:'  # i.e. 'P:' or 'U:'
+
+elif called_by == 'SCHEDULED':
+    path_prefix = 'D:\projects'  # i.e. 'D:\projects' or 'D:\users'
+
+else:  # If script run directly and no called_by parameter specified
+    path_prefix = 'P:'  # i.e. 'P:' or 'U:'
+
 # Name of ini file located in the same location as this script.
-cfgFile = r"P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Publish_FS_Exec_Dashboard.ini"
+cfgFile = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Publish_FS_Exec_Dashboard.ini".format(path_prefix)
 
 if os.path.isfile(cfgFile):
     config = ConfigParser.ConfigParser()
@@ -43,12 +56,18 @@ else:
     raw_input('\nPress ENTER to end script...')
     sys.exit()
 
+# Set the path to the success/fail files
+success_error_folder = config.get('Success_Error', 'Success_Error_Folder')
+process_success_file = 'SUCCESS_running_DA_Process_Fire_Data.txt'  # Hard Coded into variable here
+publish_success_file  = 'SUCCESS_running_{}.txt'.format(name_of_script.split('.')[0])
+
 # Log file is a concatenation of the config file path to the log folder and the name of the script (w/o the .py)
 log_file = '{}\{}'.format(config.get('Log_File', 'Log_File_Folder'), name_of_script.split('.')[0])
 
 # Permissions
 permissions_to_set = "Query"  # <Full permissions = "Query,Create,Update,Delete,Uploads,Editing,Sync">
 
+success = True
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                           MG's Functions Below
@@ -97,7 +116,7 @@ def Write_Print_To_Log(log_file):
     start_time_str = [start_time.strftime('%m/%d/%Y  %I:%M:%S %p')][0]
     print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
     print '                  {}'.format(start_time_str)
-    print '             START <name_of_script_here>.py'
+    print '             START {}'.format(name_of_script)
     print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n'
 
 
@@ -592,80 +611,121 @@ if __name__ == "__main__":
     # Turn all 'print' statements into a log-writing object
     Write_Print_To_Log(log_file)
 
-    # Find and gather settings from the ini file
-    localPath = sys.path[0]
-    ##settingsFile = os.path.join(localPath, name_of_cfgFile) <MG 20180212: Commented out t oallow for full path to .ini>
-    settingsFile = cfgFile  # <MG 20180212: Variable set at top of script>
+    # If this script was called with a batch file, make sure that the data
+    # was processed successfully before trying to process it.
+    if called_by != '':
+        print 'Checking to see if the AGOL data was processed successfully:'
 
-    if os.path.isfile(settingsFile):
-        print("Using INI file found at: {}.".format(settingsFile))
-        config = ConfigParser.ConfigParser()
-        config.read(settingsFile)
-    else:
-        print("INI file not found. \nMake sure a valid '.ini' file exists in the same directory as this script.")
-        sys.exit()
+        if os.path.exists('{}\{}'.format(success_error_folder, process_success_file)):
+            print '  \nDA_Process_Fire_Data.py was run successfully, publishing the data now\n'
+            sys.stdout.flush()
+        else:
+            success = False
+            print '\n*** ERROR! ***'
+            print '  This script is designed to publish data that was processed by a previously run script: "DA_Process_Fire_Data.py"'
+            print '  If it was completed successfully, The "DA_Process_Fire_Data.py" script should have written a file named:\n    {}'.format(process_success_file)
+            print '  At:\n    {}'.format(success_error_folder)
+            print '\n  It appears that the above file does not exist, meaning that the Process script had an error.'
+            print '  This script will not run if there was an error in "DA_Process_Fire_Data.py"'
+            print '  Please fix any problems with that script first. Then try again.'
+            print '  You can find the log file at:\n    {}'.format(log_file)
 
-    # AGOL Credentials
-    inputUsername = config.get('AGOL', 'USER')
-    inputPswd = config.get('AGOL', 'PASS')
+    if success == True:
+        # Find and gather settings from the ini file
+        localPath = sys.path[0]
+        ##settingsFile = os.path.join(localPath, name_of_cfgFile) <MG 20180212: Commented out t oallow for full path to .ini>
+        settingsFile = cfgFile  # <MG 20180212: Variable set at top of script>
 
-    # FS values
-    MXD = config.get('FS_INFO', 'MXD')
-    serviceName = config.get('FS_INFO', 'SERVICENAME')
-    folderName = config.get('FS_INFO', 'FOLDERNAME')
-    tags = config.get('FS_INFO', 'TAGS')
-    summary = config.get('FS_INFO', 'DESCRIPTION')
-    maxRecords = config.get('FS_INFO', 'MAXRECORDS')
+        if os.path.isfile(settingsFile):
+            print("Using INI file found at: {}.".format(settingsFile))
+            config = ConfigParser.ConfigParser()
+            config.read(settingsFile)
+        else:
+            print("INI file not found. \nMake sure a valid '.ini' file exists in the same directory as this script.")
+            sys.exit()
 
-    # Share FS to: everyone, org, groups
-    shared = config.get('FS_SHARE', 'SHARE')
-    everyone = config.get('FS_SHARE', 'EVERYONE')
-    orgs = config.get('FS_SHARE', 'ORG')
-    groups = config.get('FS_SHARE', 'GROUPS')  # Groups are by ID. Multiple groups comma separated
+        # AGOL Credentials
+        inputUsername = config.get('AGOL', 'USER')
+        inputPswd = config.get('AGOL', 'PASS')
 
-    use_prxy = config.get('PROXY', 'USEPROXY')
-    pxy_srvr = config.get('PROXY', 'SERVER')
-    pxy_port = config.get('PROXY', 'PORT')
-    pxy_user = config.get('PROXY', 'USER')
-    pxy_pass = config.get('PROXY', 'PASS')
+        # FS values
+        MXD = config.get('FS_INFO', 'MXD')
+        serviceName = config.get('FS_INFO', 'SERVICENAME')
+        folderName = config.get('FS_INFO', 'FOLDERNAME')
+        tags = config.get('FS_INFO', 'TAGS')
+        summary = config.get('FS_INFO', 'DESCRIPTION')
+        maxRecords = config.get('FS_INFO', 'MAXRECORDS')
 
-    proxyDict = {}
-    if ast.literal_eval(use_prxy):
-        http_proxy = "http://" + pxy_user + ":" + pxy_pass + "@" + pxy_srvr + ":" + pxy_port
-        https_proxy = "http://" + pxy_user + ":" + pxy_pass + "@" + pxy_srvr + ":" + pxy_port
-        ftp_proxy = "http://" + pxy_user + ":" + pxy_pass + "@" + pxy_srvr + ":" + pxy_port
-        proxyDict = {"http": http_proxy, "https": https_proxy, "ftp": ftp_proxy}
+        # Share FS to: everyone, org, groups
+        shared = config.get('FS_SHARE', 'SHARE')
+        everyone = config.get('FS_SHARE', 'EVERYONE')
+        orgs = config.get('FS_SHARE', 'ORG')
+        groups = config.get('FS_SHARE', 'GROUPS')  # Groups are by ID. Multiple groups comma separated
 
-    # create a temp directory under the script
-    tempDir = os.path.join(localPath, "tempDir")
-    if not os.path.isdir(tempDir):
-        os.mkdir(tempDir)
-    finalSD = os.path.join(tempDir, serviceName + ".sd")
+        use_prxy = config.get('PROXY', 'USEPROXY')
+        pxy_srvr = config.get('PROXY', 'SERVER')
+        pxy_port = config.get('PROXY', 'PORT')
+        pxy_user = config.get('PROXY', 'USER')
+        pxy_pass = config.get('PROXY', 'PASS')
 
-    # initialize AGOLHandler class
-    agol = AGOLHandler(inputUsername, inputPswd, serviceName, folderName, proxyDict)
+        proxyDict = {}
+        if ast.literal_eval(use_prxy):
+            http_proxy = "http://" + pxy_user + ":" + pxy_pass + "@" + pxy_srvr + ":" + pxy_port
+            https_proxy = "http://" + pxy_user + ":" + pxy_pass + "@" + pxy_srvr + ":" + pxy_port
+            ftp_proxy = "http://" + pxy_user + ":" + pxy_pass + "@" + pxy_srvr + ":" + pxy_port
+            proxyDict = {"http": http_proxy, "https": https_proxy, "ftp": ftp_proxy}
 
-    # Turn map document into .SD file for uploading
-    print 'Using MXD at: {} to create .SD file'.format(MXD)
-    makeSD(MXD, serviceName, tempDir, finalSD, maxRecords, tags, summary)
+        # create a temp directory under the script
+        tempDir = os.path.join(localPath, "tempDir")
+        if not os.path.isdir(tempDir):
+            os.mkdir(tempDir)
+        finalSD = os.path.join(tempDir, serviceName + ".sd")
 
-    # overwrite the existing .SD on arcgis.com
-    if agol.upload(finalSD, tags, summary):
+        # initialize AGOLHandler class
+        agol = AGOLHandler(inputUsername, inputPswd, serviceName, folderName, proxyDict)
 
-        # publish the sd which was just uploaded
-        fsID = agol.publish()
+        # Turn map document into .SD file for uploading
+        print 'Using MXD at: {} to create .SD file'.format(MXD)
+        makeSD(MXD, serviceName, tempDir, finalSD, maxRecords, tags, summary)
 
-        # share the item
-        if ast.literal_eval(shared):
-            agol.enableSharing(fsID, everyone, orgs, groups)
+        # overwrite the existing .SD on arcgis.com
+        if agol.upload(finalSD, tags, summary):
 
-        print '\nDeleting tempDir...'
-        shutil.rmtree(tempDir)
-        print("\nFinished.")
+            # publish the sd which was just uploaded
+            fsID = agol.publish()
+
+            # share the item
+            if ast.literal_eval(shared):
+                agol.enableSharing(fsID, everyone, orgs, groups)
+
+            print '\nDeleting tempDir...'
+            shutil.rmtree(tempDir)
+            print("Finished deleting tempDir.")
+
+    #---------------------------------------------------------------------------
+    # Write a file to disk to let other scripts know if this script ran
+    # successfully or not
+    try:
+        # Set a file_name depending on the 'success' variable.
+        if success == True:
+            file_name = 'SUCCESS_running_{}.txt'.format(name_of_script.split('.')[0])
+
+        else:
+            file_name = 'ERROR_running_{}.txt'.format(name_of_script.split('.')[0])
+
+        # Write the file
+        file_path = '{}\{}'.format(success_error_folder, file_name)
+        print '\nCreating file:\n  {}'.format(file_path)
+        open(file_path, 'w')
+
+    except Exception as e:
+        success = False
+        print '*** ERROR with Writing a Success or Fail file() ***'
+        print str(e)
 
     # End of script reporting
-    print 'End of script'
+    print '\nEnd of script.\nSuccess = {}'.format(success)
     sys.stdout = orig_stdout
-    print 'End of script'
+    print 'End of script.\nSuccess = {}'.format(success)
 
 ##    raw_input('Press "ENTER" to continue...')

@@ -181,7 +181,6 @@ def main():
 
         # Download the data
         try:
-            delete_me
             Get_AGOL_Data_All(AGOL_fields, token, FS_url, index_of_layer, wkg_folder, FGDB_name, FC_name_date)
         except Exception as e:
             success = False
