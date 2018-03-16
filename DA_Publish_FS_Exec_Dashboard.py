@@ -740,6 +740,7 @@ if __name__ == "__main__":
 
     # End of script reporting
     print '\nEnd of script.\nSuccess = {}'.format(success)
+    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     sys.stdout = orig_stdout
     print 'End of script.\nSuccess = {}'.format(success)
 
