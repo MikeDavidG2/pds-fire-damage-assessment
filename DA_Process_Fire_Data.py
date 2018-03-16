@@ -248,8 +248,8 @@ def main():
 
             # Add Attribute Index
             try:
+                print 'Adding index to: {}\n'.format(orig_DA_reports_fc)
                 arcpy.AddIndex_management(orig_DA_reports_fc, ['ReportNumber'], 'orig_DA_index')
-                print 'Added index to: {}\n'.format(orig_DA_reports_fc)
             except:
                 print 'Index not added.  It probably already exists\n'
 
@@ -278,8 +278,8 @@ def main():
 
             # Add Attribute Index
             try:
+                print 'Adding index to: {}\n'.format(parcels_extract_path)
                 arcpy.AddIndex_management(parcels_extract_path, ['APN', 'APN_8'], 'parcels_extract_index')
-                print 'Added index to: {}\n'.format(parcels_extract_path)
             except:
                 print 'Index not added.  It probably already exists\n'
 
@@ -297,8 +297,8 @@ def main():
 
             # Add Attribute Index
             try:
+                print 'Adding index to: {}\n'.format(working_fc)
                 arcpy.AddIndex_management(working_fc, ['ReportNumber', 'APN', 'APN_8'], 'working_fc_index')
-                print 'Added index to: {}\n'.format(working_fc)
             except:
                 print 'Index not added.  It probably already exists\n'
 
