@@ -1,4 +1,5 @@
 #-------------------------------------------------------------------------------
+# Name: DA_Process_Fire_Data.py
 # Purpose:
 """
 SHORT VERSION:
@@ -15,61 +16,72 @@ Set up variables
 Start Calling Functions
 1. Turn all 'print' statements into a log-writing object for logging purposes.
 
-2. Get the path to the most recently downloaded data.
+2. If the script is called by a batch file (which means that this script is
+     a part of a series of scripts), CHECK to see if the previous script ran
+     successfully or not.  If the previous script ran successfully, this script
+     will continue to run.  If the previous script had errors in it, we will not
+     run this script.  The check is performed by looking for a specifically named
+     text file found in the success_error_folder.
+
+3. Get the path to the most recently downloaded data.
      This is the path of the data that was most recently downloaded from AGOL
      with the 'DA_Download_Fire_Data.py' script.
 
-3. Set the date that the data was most recently downloaded.
+4. Set the date that the data was most recently downloaded.
      The date is set into a Feature Class (FC) that has an attribute
      'AGOL_Data_Last_Downloaded'.
      This is used to report in the Dashboard when the data was downloaded.
 
-4. Get an extract of all parcels that intersect with the DA Reports.
+5. Get an extract of all parcels that intersect with the DA Reports.
      This selects all the parcels that intersect with the DA Reports and exports
      them to their own FC 'Parcel_All_Int_DA_Reports'.
      We do this so that the Parcel and DA Report Join that happens below is MUCH faster.
 
-5. Spatially Join the DA Reports with the extracted Parcels from above to get the working data FC.
+6. Spatially Join the DA Reports with the extracted Parcels from above to get the working data FC.
      This creates a point FC that has all the data from the DA Reports AND the extracted Parcels.
 
-6. Handle data on a stacked parcel.
+7. Handle data on a stacked parcel.
      Stacked parcels are multiple APN's on one parcel footprint.
      If a DA Report is on a stacked parcel we either keep the first point and
      nullify all the other points that were created during the spatial join from above,
      OR we keep only the point with the correct APN if that Report Number and Parcel APN were 'linked' in a Control CSV.
      This is a complicated function, please see documentation in the function 'Handle_Stacked_Parcels' below.
 
-7. Add fields to the working data.
+8. Add fields to the working data.
      This function uses a Control CSV to programatically add the same fields every script execution.
      Please see which fields are added by viewing the 'FieldsToAdd.csv' file.
 
-8. Calculate fields in the working data.
+9. Calculate fields in the working data.
      This functions uses a Control CSV to programatically calc the same fields every script execution.
      Please see which fields are calced by viewing the 'FieldsToCalculate.csv' file.
 
-9. QA/QC the working data.
+10. QA/QC the working data.
      This function writes to a separate log file that only contains the below QA/QC checks.
      This separate QA/QC log file can be placed in a folder that can be viewable
      by a layperson in order to tell them how they should edit the data themselves to produce good data.
      This is a complicated function, please see documentation in the function 'QA_QC_Data' below.
 
-10. Backup the production features before attempting to edit them.
+11. Backup the production features before attempting to edit them.
       This function will only delete the existing features in the FC, it will not delete the FC itself.
       This is so we do not need to have an admin connection to the SDE, and we
       don't have to worry about schema locks.
       NOTE: If the schema of the prod FC changes, this _BAK FC will need to be manually changed.
 
-11. Delete the features in the prod FC
+12. Delete the features in the prod FC
       This function will only delete the existing features in the FC, it will not delete the FC itself.
       This is so any settings (fields, domains) that are a part of the FC will remain intact.
 
-12. Append the features from the working FC to the prod Fc
+13. Append the features from the working FC to the prod FC
       This function will only append the features in the working FC to the prod FC, it will not recreate the prod FC itself.
       This is so any settings (fields, domains) that are a part of the prod FC will remain intact.
 
-13. Get a token from AGOL so we have permission to access the AGOL database with the original DA Reports.
+14. Export the updated prod FC to an Excel file
+      The date and time obtained from Get_DT_To_Append() will be
+      appended to the file name.
 
-14. Update the AGOL fields.
+15. Get a token from AGOL so we have permission to access the AGOL database with the original DA Reports.
+
+16. Update the AGOL fields.
       This function updates the AGOL DA Reports
       a. Update any features where the '[Quantity] IS NULL' to have a Quantity = 1.
            We do this because it is possible for a user to have sent a survey
@@ -80,6 +92,10 @@ Start Calling Functions
            We do this because we have already calculated the values of
            [EstimatedReplacementCost] (in the 'Fields_Calculate_Fields' function above),
            and we want to push any calculations we made on the working FC to the AGOL data.
+
+17. Write a success or error text file to the success_error_folder so that
+      subsequently called scripts will know if this script ran successfully
+      or not.
 
 End of script reporting
 1. Print out a footer and if the script was successful or not.

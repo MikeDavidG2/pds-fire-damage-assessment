@@ -6,6 +6,14 @@ To download data from an AGOL Feature Service.  This script will download ALL
 of the data in the FS regardless of the size of the data or the number of
 features returned by the server.
 
+NOTE: This script has has had a section added to it that writes a success or
+error file to a specific folder (success_error_folder).  This section is
+at the end of the main() (before the footer for the log file is written).
+It is intended to communicate to other scripts if this script had a successful
+run or not.  The success_error_folder is first deleted to remove any files
+from previous runs of the script, then a success or error file is written
+to disk.
+
 The users set many of the variables in a config file:
     1) Username and Password of an AGOL account that has permission to download
        the data (used to get the token).

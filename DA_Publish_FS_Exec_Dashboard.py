@@ -3,7 +3,21 @@
 # Edits by Mike Grue are noted with <MG MM/DD/YY ... >
 # Requires a Configuration settings file (.ini)
 # Downloaded the script from:  https://github.com/arcpy/update-hosted-feature-service
+"""
+NOTE:
+1. If the script is called by a batch file (which means that this script is
+     a part of a series of scripts), CHECK to see if the previous script ran
+     successfully or not.  If the previous script ran successfully, this script
+     will continue to run.  If the previous script had errors in it, we will not
+     run this script.  The check is performed by looking for a specifically named
+     text file found in the success_error_folder.  This check is performed
+     right after turning the print statements to a log writing object
+     Write_Print_To_Log().
 
+2. Write a success or error text file to the success_error_folder so that
+      subsequently called scripts will know if this script ran successfully
+      or not.  This happens right before the end of script reporting.
+"""
 import ConfigParser
 import ast
 import os
