@@ -2113,7 +2113,6 @@ def AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, to
     get_object_id_url = query_url + query
 
     # Get the list of OBJECTID's that satisfied the where_clause
-
     print '    Getting list of OBJECTID\'s that satisfied the where clause for layer:\n      {}'.format(query_url)
     print '    Where clause: "{}"'.format(where_clause)
     response = urllib2.urlopen(get_object_id_url)
