@@ -2100,8 +2100,6 @@ def AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, to
     print "  Starting AGOL_Get_Object_Ids_Where()"
     import urllib2, urllib, json
 
-    #TODO: have a success variable to return
-
     # Create empty list to hold the OBJECTID's that satisfy the where clause
     object_ids = []
 
