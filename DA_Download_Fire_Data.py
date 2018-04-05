@@ -125,7 +125,8 @@ def main():
         FC_name       = config.get('Download_Info', 'FC_name')
 
         # Set the log file path
-        log_file = r'{}\{}'.format(config.get('Download_Info', 'Log_File_Folder'), name_of_script.split('.')[0])
+        log_file_folder =config.get('Download_Info', 'Log_File_Folder')
+        log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
 
         # Set the path to the success/fail files
         success_error_folder = config.get('Download_Info', 'Success_Error_Folder')
@@ -155,6 +156,11 @@ def main():
     #---------------------------------------------------------------------------
     #                          Start Calling Functions
 
+    # Make sure the log file folder exists, create it if it does not
+    if not os.path.exists(log_file_folder):
+        print 'NOTICE, log file folder does not exist, creating it now\n'
+        os.mkdir(log_file_folder)
+
     # Turn all 'print' statements into a log-writing object
     if success == True:
         try:
@@ -164,6 +170,20 @@ def main():
             print '*** ERROR with Write_Print_To_Log() ***'
             print str(e)
 
+    #---------------------------------------------------------------------------
+    #                         Check Folder Schema.
+    #          Confirm all folders/files needed in this script exist
+    # Make sure wkg_folder exists, create it if it does not
+    if not os.path.exists(wkg_folder):
+        print 'NOTICE, Working Folder does not exist, creating it now\n'
+        os.mkdir(wkg_folder)
+
+    # Make sure FGDB_name exists in the wkg_folder, create it if it does not
+    if not os.path.exists(wkg_folder + '\\' + FGDB_name):
+        print 'NOTICE, FGDB does not exist, creating it now\n'
+        arcpy.CreateFileGDB_management(wkg_folder, FGDB_name, 'CURRENT')
+
+    #---------------------------------------------------------------------------
     # Get a token with permissions to view the data
     if success == True:
         try:
@@ -173,6 +193,7 @@ def main():
             print '*** ERROR with Get_Token() ***'
             print str(e)
 
+    #---------------------------------------------------------------------------
     # Download the data
     if success == True:
 
@@ -225,8 +246,8 @@ def main():
         success = False
         print '*** ERROR with Writing a Success or Fail file() ***'
         print str(e)
-    #---------------------------------------------------------------------------
 
+    #---------------------------------------------------------------------------
     # Footer for log file
     finish_time_str = [datetime.datetime.now().strftime('%m/%d/%Y  %I:%M:%S %p')][0]
     print '\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'

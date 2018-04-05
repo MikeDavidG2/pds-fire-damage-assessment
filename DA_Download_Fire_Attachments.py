@@ -105,8 +105,8 @@ def main():
         sys.exit()
 
     # Set the log file paths
-    Log_File_Folder = config.get('Download_Info', 'Log_File_Folder')
-    log_file = r'{}\{}'.format(Log_File_Folder, name_of_script.split('.')[0])
+    log_file_folder = config.get('Download_Info', 'Log_File_Folder')
+    log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
 
     # Set the data paths
     Attachment_Folder = config.get('Download_Info', 'Attachment_Folder')
@@ -128,6 +128,11 @@ def main():
     #---------------------------------------------------------------------------
     #                          Start Calling Functions
 
+    # Make sure the log file folder exists, create it if it does not
+    if not os.path.exists(log_file_folder):
+        print 'NOTICE, log file folder does not exist, creating it now\n'
+        os.mkdir(log_file_folder)
+
     # Turn all 'print' statements into a log-writing object
     if success == True:
         try:
@@ -137,6 +142,21 @@ def main():
             print '*** ERROR with Write_Print_To_Log() ***'
             print str(e)
 
+    #---------------------------------------------------------------------------
+    #                         Check Folder Schema.
+    #          Confirm all folders/files needed in this script exist
+    if success == True:
+        try:
+            # Make sure Attachment_Folder exists, create it if it does not
+            if not os.path.exists(Attachment_Folder):
+                print 'NOTICE, Attachments folder does not exist, creating it now at:\n  {}\n'.format(Attachment_Folder)
+                os.mkdir(Attachment_Folder)
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Check Folder Schema ***'
+            print str(e)
+
+    #---------------------------------------------------------------------------
     # Get a token with permissions to view the data
     if success == True:
         try:
@@ -570,7 +590,7 @@ def Get_Attachments(token, gaURL, gaFolder, attachment_name_prefix, use_field_to
     if (attachment_dl == False):
         print '\n  No attachments saved this run.\n  OK if no new attachments since last script run.'
 
-    print '\n  All attachments can be found at: %s' % gaFolder
+    print '\n  All attachments can be found at:\n    %s' % gaFolder
 
     # Delete the JSON file since it is no longer needed.
     ##print '  Deleting JSON file'

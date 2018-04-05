@@ -111,7 +111,7 @@ End of script reporting
 
 #TODO: test this script on the County network
 
-import arcpy, sys, datetime, os, ConfigParser
+import arcpy, sys, datetime, os, ConfigParser, shutil
 arcpy.env.overwriteOutput = True
 
 def main():
@@ -176,8 +176,8 @@ def main():
     prod_FC_path          = config.get('Process_Info', 'Prod_FC_path')
 
 
-    # Set CSV that looks for Report Number / APN pairs (for stacked parcels)
-    match_Report_to_APN_csv  = config.get('Process_Info', 'Report_to_APN_csv')
+    # Set txt that looks for Report Number / APN pairs (for stacked parcels)
+    match_Report_to_APN_txt  = config.get('Process_Info', 'Report_to_APN_txt')
 
     # Set info for the Excel Exports of the production database
     excel_export_folder = config.get('Process_Info', 'excel_export_folder')
@@ -212,6 +212,11 @@ def main():
     #---------------------------------------------------------------------------
     #                          Start Calling Functions
 
+    # Make sure the log file folder exists, create it if it does not
+    if not os.path.exists(log_file_folder):
+        print 'NOTICE, log file folder does not exist, creating it now\n'
+        os.mkdir(log_file_folder)
+
     # Turn all 'print' statements into a log-writing object
     if success == True:
         try:
@@ -221,24 +226,106 @@ def main():
             print '\n*** ERROR with Write_Print_To_Log() ***'
             print str(e)
 
+    #---------------------------------------------------------------------------
+    #                         Check Folder Schema.
+    #          Confirm all folders/files needed in this script exist
+    if success == True:
+        try:
+            # Make sure the script can access the PARCELS_ALL FC, success = False if it cannot
+            if not arcpy.Exists(parcels_all):
+                print '*** ERROR, the PARCELS_ALL Feature Class cannot be found at:\n    {}'.format(parcels_all)
+                print '  Please confirm that the FC exists and that the .ini file is correctly pointing to it'
+                print '  The .ini file is found at:\n    {}\n'.format(cfgFile)
+                success = False
+
+            # Make sure the script can access prod_FC_path, success = False if it cannot
+            if not arcpy.Exists(prod_FC_path):
+                print '*** ERROR, the Production Feature Class cannot be found at:\n    {}'.format(prod_FC_path)
+                print '  Please confirm that the FC exists and that the .ini file is correctly pointing to it'
+                print '  The .ini file is found at:\n    {}\n'.format(cfgFile)
+                success = False
+
+            # Make sure wkg_folder exists, create it if it does not
+            if not os.path.exists(wkg_folder):
+                print 'NOTICE, Working Folder does not exist, creating it now at:\n  {}\n'.format(wkg_folder)
+                os.mkdir(wkg_folder)
+
+            # Make sure processing FGDB exists in the wkg_folder, create it if it does not
+            if not os.path.exists(processing_FGDB_path):
+                print 'NOTICE, FGDB does not exist, creating it now at:\n  {}\n'.format(processing_FGDB_path)
+                arcpy.CreateFileGDB_management(wkg_folder, processing_FGDB_name, 'CURRENT')
+
+            # Make sure the AGOL_Data_Last_Downloaded FC exists, create it if it does not
+            if not arcpy.Exists(AGOL_Data_DL_path):
+                print 'NOTICE, AGOL Data Last Downloaded FC doesn\'t exist, creating it now at:\n  {}\n'.format(AGOL_Data_DL_path)
+
+                # Create the FC
+                spatial_extent = parcels_all  # State Plane VI
+                arcpy.CreateFeatureclass_management(processing_FGDB_path, AGOL_Data_DL_name, 'POINT', '', '', '', spatial_extent)
+
+                # Add the needed field
+                field_name = 'AGOL_Data_Last_Downloaded'
+                arcpy.AddField_management(AGOL_Data_DL_path, field_name, 'TEXT')
+
+                #                  Create the needed Feature
+                # List of values that will be used to construct new feature
+                coordinates = (6247649.499, 1890792.132)  # These are State Plane VI
+                row_values = [(coordinates, 'Script will calc date and time here')]
+
+                # Create an InsertCursor and add the row values to create one feature
+                #  near La Jolla Cove
+                with arcpy.da.InsertCursor(AGOL_Data_DL_path, ['SHAPE@XY', field_name]) as cursor:
+                    for row in row_values:
+                        cursor.insertRow(row)
+                del cursor
+
+            # Make sure the Parcel_All_Int_DA_Reports FC exists, create it if it does not
+            if not arcpy.Exists(parcels_extract_path):
+                print 'NOTICE, Parcel Extract FC doesn\'t exist, creating it now at:\n  {}\n'.format(parcels_extract_path)
+
+                # Create a layer of the PARCELS_ALL FC with only one record selected
+                where_clause = "OBJECTID = 1"
+                par_lyr = Select_By_Attribute(parcels_all, 'NEW_SELECTION', where_clause)
+
+                # Save the PARCELS_ALL layer with only one record to the location this
+                #   script expects for it to be.
+                arcpy.CopyFeatures_management(par_lyr, parcels_extract_path)
+
+            # Make sure the QA_QC_log_folder exists, create it if it does not
+            if not os.path.exists(QA_QC_log_folder):
+                print 'NOTICE, QA/QC log folder doesn\'t exist, creating it now at:\n  {}\n'.format(QA_QC_log_folder)
+                os.mkdir(QA_QC_log_folder)
+
+            # Make sure the excel_export_folder exists, create it if it does not
+            if not os.path.exists(excel_export_folder):
+                print 'NOTICE, Excel export folder doesn\'t exist, creating it now at:\n  {}\n'.format(excel_export_folder)
+                os.mkdir(excel_export_folder)
+
+        except Exception as e:
+            success = False
+            print '\n*** ERROR with Check Folder Schema ***'
+            print str(e)
+
+    #---------------------------------------------------------------------------
     # If this script was called with a batch file, make sure that the data
     # was downloaded successfully before trying to process it.
-    if called_by != '':
-        print 'Checking to see if the AGOL data was downloaded successfully:'
+    if success == True:
+        if called_by != '':
+            print 'Checking to see if the AGOL data was downloaded successfully:'
 
-        if os.path.exists('{}\{}'.format(success_error_folder, download_success_file)):
-            print '\n  DA_Download_Fire_Data.py was run successfully, processing the data now\n'
-            sys.stdout.flush()
-        else:
-            success = False
-            print '\n*** ERROR! ***'
-            print '  This script is designed to process data that was downloaded by a previously run script: "DA_Download_Fire_Data.py"'
-            print '  If it was completed successfully, The "DA_Download_Fire_Data.py" script should have written a file named:\n    {}'.format(download_success_file)
-            print '  At:\n    {}'.format(success_error_folder)
-            print '\n  It appears that the above file does not exist, meaning that the Download script had an error.'
-            print '  This script will not run if there was an error in "DA_Download_Fire_Data.py"'
-            print '  Please fix any problems with that script first. Then try again.'
-            print '  You can find the log files at:\n    {}'.format(log_file_folder)
+            if os.path.exists('{}\{}'.format(success_error_folder, download_success_file)):
+                print '\n  DA_Download_Fire_Data.py was run successfully, processing the data now\n'
+                sys.stdout.flush()
+            else:
+                success = False
+                print '\n*** ERROR! ***'
+                print '  This script is designed to process data that was downloaded by a previously run script: "DA_Download_Fire_Data.py"'
+                print '  If it was completed successfully, The "DA_Download_Fire_Data.py" script should have written a file named:\n    {}'.format(download_success_file)
+                print '  At:\n    {}'.format(success_error_folder)
+                print '\n  It appears that the above file does not exist, meaning that the Download script had an error.'
+                print '  This script will not run if there was an error in "DA_Download_Fire_Data.py"'
+                print '  Please fix any problems with that script first. Then try again.'
+                print '  You can find the log files at:\n    {}'.format(log_file_folder)
 
     # Get the path to the most recently downloaded data
     if success == True:
@@ -313,6 +400,14 @@ def main():
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+            # Copy the .txt file that matches Report Numbers to APNs
+            #   that PDS DA Team edits to a separate folder and change to a .csv file
+            match_Report_to_APN_csv = wkg_folder + '\DA_Match_Report_To_APN_temp.csv'
+            print 'Copying file:\n  {}\nTo:\n  {}'.format(match_Report_to_APN_txt, match_Report_to_APN_csv)
+            shutil.copyfile(match_Report_to_APN_txt, match_Report_to_APN_csv)
+
+            # Handle the stacked parcels
             Handle_Stacked_Parcels(orig_DA_reports_fc, working_fc, parcels_extract_path, match_Report_to_APN_csv)
         except Exception as e:
             success = False
@@ -346,7 +441,8 @@ def main():
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            success = QA_QC_Data(orig_DA_reports_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract_path, match_Report_to_APN_csv)
+            success = QA_QC_Data(orig_DA_reports_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract_path, match_Report_to_APN_txt)
+            os.remove(match_Report_to_APN_csv)  # Delete the temp csv file
         except Exception as e:
             success = False
             print '\n*** ERROR with QA_QC_Data() ***'
@@ -357,25 +453,26 @@ def main():
     #                     before attempting to change it
     # Delete the features in the backup database
     if success == True:
-        try:
-            backup_fc = '{}_BAK'.format(prod_FC_path)
-            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            print 'Backup the production features\n'
-            Delete_Features(backup_fc)
-        except Exception as e:
-            success = False
-            print '\n*** ERROR with Delete_Features() ***'
-            print str(e)
-
-    # Append the features from the production database to the backup database
-    if success == True:
-        try:
-            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            Append_Data(prod_FC_path, backup_fc)
-        except Exception as e:
-            success = False
-            print '\n*** ERROR with Append_Data() ***'
-            print str(e)
+        arcpy.CopyFeatures_management(prod_FC_path, '{}_BAK'.format(prod_FC_path))
+##        try:
+##            backup_fc = '{}_BAK'.format(prod_FC_path)
+##            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+##            print 'Backup the production features\n'
+##            Delete_Features(backup_fc)
+##        except Exception as e:
+##            success = False
+##            print '\n*** ERROR with Delete_Features() ***'
+##            print str(e)
+##
+##    # Append the features from the production database to the backup database
+##    if success == True:
+##        try:
+##            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+##            Append_Data(prod_FC_path, backup_fc)
+##        except Exception as e:
+##            success = False
+##            print '\n*** ERROR with Append_Data() ***'
+##            print str(e)
 
     #---------------------------------------------------------------------------
     #                       Append newly processed data
@@ -894,7 +991,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN_
         # Populate lists
         row_num = 0
         for row in readCSV:
-            if row_num > 7:
+            if row_num > 9:
                 r_number_csv = row[0]
                 apn_csv      = row[1]
 
@@ -918,7 +1015,7 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN_
             # same Report Number as the orig_fc.  If there are more than 1
             # record selected, then that report is on a stacked parcel
             where_clause = "ReportNumber = '{}'".format(report_number)
-            print '  Searching where: {}'.format(where_clause)
+            print '  Analyzing: {}'.format(where_clause)
             arcpy.SelectLayerByAttribute_management('working_fc_lyr', 'NEW_SELECTION', where_clause)
 
             # Get count of selected parcels
@@ -929,11 +1026,11 @@ def Handle_Stacked_Parcels(orig_fc, working_fc, parcels_fc, match_report_to_APN_
 
                 # Select by attribute the feature in orig_fc
                 where_clause = "ReportNumber = '{}'".format(report_number)
-                print '  Searching where: {}'.format(where_clause)
+                ##print '  Searching where: {}'.format(where_clause)
                 arcpy.SelectLayerByAttribute_management('orig_fc_lyr', 'NEW_SELECTION', where_clause)
 
                 # Select by location the parcels that intersect with the orig_fc point
-                print '  Selecting Parcels that intersect that report'
+                print '    Selecting Parcels that intersect that report'
                 arcpy.SelectLayerByLocation_management('par_lyr', 'INTERSECT', 'orig_fc_lyr')
                 #---------------------------------------------------------------
                 # Test to see if the report_number is in the CSV file that
@@ -1431,7 +1528,7 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                          Function QA/QC Data
-def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract, match_Report_to_APN_csv):
+def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract, match_Report_to_APN_txt):
     """
     PARAMETERS:
       orig_fc (str): Full path to the originally downloaded AGOL data.
@@ -1447,7 +1544,7 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extr
         that intersect one or more Damage Assessment reports.  This FC was
         created by the Extract_Parcels() Function above.
 
-      match_report_to_APN_csv (str):  Full path to the CSV file that contains
+      match_Report_to_APN_txt (str):  Full path to the file that contains
         Report Numbers and APNs that should be associated with each other.
 
 
@@ -1574,7 +1671,7 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extr
                 print '    {}'.format(report_number)
             print '\n  This usually happens if the report is on a stacked parcel and'
             print '  there is no info as to which APN the report should be associated with.'
-            print '\n  ANY DAMAGE ASSESSMENT STAFF, to fix please use CSV located at:\n    {}'.format(match_Report_to_APN_csv)
+            print '\n  ANY DAMAGE ASSESSMENT STAFF, to fix please use file located at:\n    {}'.format(match_Report_to_APN_txt)
             print '  To add the above reports and APNs you wish associated to each other.'
         else:
             print '  OK! There were no features on a parcel w/o APN info.'
