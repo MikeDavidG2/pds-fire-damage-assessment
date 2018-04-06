@@ -133,7 +133,7 @@ Format for config file:
 
 #TODO: test this script on the County network
 
-import arcpy, sys, datetime, os, ConfigParser, shutil
+import arcpy, sys, datetime, os, ConfigParser, shutil, time
 arcpy.env.overwriteOutput = True
 
 def main():
@@ -816,7 +816,7 @@ def Set_Date_Data_DL(fc_w_timestamp, fc_to_update):
     print '  Calculating field:\n    {}\n  In fc:\n    {} '.format(field, fc)
     print '  To equal:\n    {}'.format(expression)
 
-    arcpy.CalculateField_management(fc, field, expression)
+    arcpy.CalculateField_management(fc, field, expression, 'PYTHON_9.3')
 
     print 'Finished Set_Date_Data_DL()\n'
 
