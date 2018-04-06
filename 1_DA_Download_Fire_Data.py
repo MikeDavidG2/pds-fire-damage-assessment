@@ -42,11 +42,9 @@ The users set many of the variables in a config file:
         # Index of the layer in the Feature Service on AGOL that you want to download
         FS_index =
 
-        # Name of the EXISTING FGDB that should hold the layer from AGOL being downloaded
-        FGDB_name =
-
-        # Name you want to give the Feature Class in the FGDB for the downloaded data
-        FC_name   =
+        [Paths]
+        # Root folder for project
+        Root_Folder =
 
 Users set some variables in this script:
   Name of this script
@@ -99,7 +97,7 @@ def main():
         # Full path to a text file that has the username and password of an account
         #  that has access to at least VIEW the FS in AGOL, as well as an email
         #  account that has access to send emails.
-        cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Download_and_Process.ini".format(path_prefix)
+        cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini".format(path_prefix)
         if os.path.isfile(cfgFile):
             config = ConfigParser.ConfigParser()
             config.read(cfgFile)
@@ -116,20 +114,20 @@ def main():
         # Index of the layer in the FS you want to d/l.  Frequently 0.
         index_of_layer = config.get('Download_Info', 'FS_index')
 
-        # Set working folder that holds the FGDBs, the name of the FGDBs and the FC names.
-        wkg_folder     = config.get('Download_Info', 'wkg_folder')
+        # Set root folder
+        root_folder    = config.get('Paths', 'Root_Folder')
 
-        # Get list of name of the existing FGDB to put the new data into
-        FGDB_name     = config.get('Download_Info', 'FGDB_name')
-
-        FC_name       = config.get('Download_Info', 'FC_name')
+        # Set the FGDB name and FC name to hold the new AGOL data (timestamp added in script)
+        data_folder = '{}\Data'.format(root_folder)
+        FGDB_name   = 'DA_Fire_From_AGOL.gdb'
+        FC_name     = 'DA_Fire_from_AGOL'
 
         # Set the log file path
-        log_file_folder =config.get('Download_Info', 'Log_File_Folder')
+        log_file_folder = '{}\Scripts\Logs'.format(root_folder)
         log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
 
         # Set the path to the success/fail files
-        success_error_folder = config.get('Download_Info', 'Success_Error_Folder')
+        success_error_folder = '{}\Scripts\Source_Code\Control_Files\Success_Error'.format(root_folder)
 
     except Exception as e:
         print '*** ERROR! There was a problem setting variables from the config file'
@@ -173,15 +171,15 @@ def main():
     #---------------------------------------------------------------------------
     #                         Check Folder Schema.
     #          Confirm all folders/files needed in this script exist
-    # Make sure wkg_folder exists, create it if it does not
-    if not os.path.exists(wkg_folder):
+    # Make sure data_folder exists, create it if it does not
+    if not os.path.exists(data_folder):
         print 'NOTICE, Working Folder does not exist, creating it now\n'
-        os.mkdir(wkg_folder)
+        os.mkdir(data_folder)
 
-    # Make sure FGDB_name exists in the wkg_folder, create it if it does not
-    if not os.path.exists(wkg_folder + '\\' + FGDB_name):
+    # Make sure FGDB_name exists in the data_folder, create it if it does not
+    if not os.path.exists(data_folder + '\\' + FGDB_name):
         print 'NOTICE, FGDB does not exist, creating it now\n'
-        arcpy.CreateFileGDB_management(wkg_folder, FGDB_name, 'CURRENT')
+        arcpy.CreateFileGDB_management(data_folder, FGDB_name, 'CURRENT')
 
     #---------------------------------------------------------------------------
     # Get a token with permissions to view the data
@@ -210,7 +208,7 @@ def main():
 
         # Download the data
         try:
-            Get_AGOL_Data_All(AGOL_fields, token, FS_url, index_of_layer, wkg_folder, FGDB_name, FC_name_date)
+            Get_AGOL_Data_All(AGOL_fields, token, FS_url, index_of_layer, data_folder, FGDB_name, FC_name_date)
         except Exception as e:
             success = False
             print '*** ERROR with Get_AGOL_Data_All() ***'
@@ -275,7 +273,7 @@ def main():
 
     if success == True:
         print '\nSUCCESSFULLY ran {}'.format(name_of_script)
-        print 'Please find downloaded data at:\n  {}\n'.format(wkg_folder)
+        print 'Please find downloaded data at:\n  {}\n'.format(data_folder)
     else:
         print '\n*** ERROR with {} ***'.format(name_of_script)
         print 'Please see log file (noted above) for troubleshooting\n'
@@ -436,7 +434,7 @@ def Get_Token(cfgFile, gtURL="https://www.arcgis.com/sharing/rest/generateToken"
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                             FUNCTION Get_AGOL_Data_All()
-def Get_AGOL_Data_All(AGOL_fields, token, FS_url, index_of_layer, wkg_folder, wkg_FGDB, FC_name):
+def Get_AGOL_Data_All(AGOL_fields, token, FS_url, index_of_layer, data_folder, wkg_FGDB, FC_name):
     """
     PARAMETERS:
       AGOL_fields (str) = The fields we want to have the server return from our query.
@@ -447,9 +445,9 @@ def Get_AGOL_Data_All(AGOL_fields, token, FS_url, index_of_layer, wkg_folder, wk
         Should be the service URL on AGOL (up to the '/FeatureServer' part).
       index_of_layer (int)= The index of the specific layer in the FS to download.
         i.e. 0 if it is the first layer in the FS, 1 if it is the second layer, etc.
-      wkg_folder (str) = Full path to the folder that contains the FGDB that you
+      data_folder (str) = Full path to the folder that contains the FGDB that you
         want to download the data into.  FGDB must already exist.
-      wkg_FGDB (str) = Name of the working FGDB in the wkg_folder.
+      wkg_FGDB (str) = Name of the working FGDB in the data_folder.
       FC_name (str) = The name of the FC that will be created to hold the data
         downloaded by this function.  This FC gets overwritten every time the
         script is run.
@@ -561,9 +559,9 @@ def Get_AGOL_Data_All(AGOL_fields, token, FS_url, index_of_layer, wkg_folder, wk
         # Process d/l data
 
         if first_iteration == True:  # Then this is the first run and d/l data to the FC_name
-            path = wkg_folder + "\\" + wkg_FGDB + '\\' + FC_name
+            path = data_folder + "\\" + wkg_FGDB + '\\' + FC_name
         else:
-            path = wkg_folder + "\\" + wkg_FGDB + '\\temp_to_append'
+            path = data_folder + "\\" + wkg_FGDB + '\\temp_to_append'
 
         #Copy the features to the FGDB.
         print '    Copying AGOL database features to: %s' % path
@@ -571,7 +569,7 @@ def Get_AGOL_Data_All(AGOL_fields, token, FS_url, index_of_layer, wkg_folder, wk
 
         # If this is a subsequent run then append the newly d/l data to the FC_name
         if first_iteration == False:
-            orig_path = wkg_folder + "\\" + wkg_FGDB + '\\' + FC_name
+            orig_path = data_folder + "\\" + wkg_FGDB + '\\' + FC_name
             print '    Appending:\n      {}\n      To:\n      {}'.format(path, orig_path)
             arcpy.Append_management(path, orig_path, 'NO_TEST')
 

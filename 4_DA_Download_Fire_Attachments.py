@@ -20,18 +20,20 @@ Set the following variables in the script:
     cfgFile
 
 Set the following variables in the cfgFile:
-    [Download_Info]
-    Log_File_Folder
-    Attachment_Folder
-    FS_name
-
     [AGOL]
-    usr (for an AGOL account with permission to access the FS_name)
-    pwd (for an AGOL account with permission to access the FS_name)
+    usr = (for an AGOL account with permission to access the name_of_FS)
+    pwd = (for an AGOL account with permission to access the name_of_FS)
 
     [email]
-    usr (for an email account)
-    pwd (for an email account)
+    usr = (for an email account)
+    pwd = (for an email account)
+
+    [Download_Info]
+    FS_name = (probably starts with 'service_xxxxx'
+
+    [Paths]
+    Root_Folder =
+    Share_Folder =
 """
 #
 # Author:      mgrue
@@ -91,7 +93,7 @@ def main():
     # Full path to a text file that has the username and password of an account
     #  that has access to at least VIEW the FS in AGOL, as well as an email
     #  account that has access to send emails.
-    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Download_and_Process.ini".format(path_prefix)
+    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini".format(path_prefix)
 
     #---------------------------------------------------------------------------
     # Set variables from the cfgFile
@@ -104,18 +106,23 @@ def main():
         raw_input('\nPress ENTER to end script...')
         sys.exit()
 
+    # Get variables from .ini file
+    name_of_FS           = config.get('Download_Info', 'FS_name')  # That holds the attachments
+    root_folder          = config.get('Paths',         'Root_Folder')
+    share_folder         = config.get('Paths',         'Share_Folder')
+
     # Set the log file paths
-    log_file_folder = config.get('Download_Info', 'Log_File_Folder')
+    log_file_folder = '{}\Scripts\Logs'.format(root_folder)
     log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
 
     # Set the data paths
-    Attachment_Folder = config.get('Download_Info', 'Attachment_Folder')
+    Attachment_Folder = '{}\Attachments'.format(share_folder)
 
-    # Get the Feature Service Name that holds the Attachments
-    FS_name       = config.get('Download_Info', 'FS_name')
+    # Set the path to the success/fail files
+    success_error_folder = '{}\Scripts\Source_Code\Control_Files\Success_Error'.format(root_folder)
 
     # Set the Get Attachments URL
-    gaURL  = r'https://services1.arcgis.com/1vIhDJwtG5eNmiqX/arcgis/rest/services/{}/FeatureServer/CreateReplica?'.format(FS_name)
+    gaURL  = r'https://services1.arcgis.com/1vIhDJwtG5eNmiqX/arcgis/rest/services/{}/FeatureServer/CreateReplica?'.format(name_of_FS)
 
     #---------------------------------------------------------------------------
     #                Set Variables that will probably not change
@@ -174,6 +181,27 @@ def main():
             success = False
             print '*** ERROR with Get_Attachments() ***'
             print str(e)
+
+    #---------------------------------------------------------------------------
+    # Write a file to disk to let other scripts know if this script ran
+    # successfully or not
+    try:
+        # Set a file_name depending on the 'success' variable.
+        if success == True:
+            file_name = 'SUCCESS_running_{}.txt'.format(name_of_script.split('.')[0])
+
+        else:
+            file_name = 'ERROR_running_{}.txt'.format(name_of_script.split('.')[0])
+
+        # Write the file
+        file_path = '{}\{}'.format(success_error_folder, file_name)
+        print '\nCreating file:\n  {}'.format(file_path)
+        open(file_path, 'w')
+
+    except Exception as e:
+        success = False
+        print '*** ERROR with Writing a Success or Fail file() ***'
+        print str(e)
 
     #---------------------------------------------------------------------------
     # Footer for log file

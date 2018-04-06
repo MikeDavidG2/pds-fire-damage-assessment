@@ -100,6 +100,28 @@ Start Calling Functions
 End of script reporting
 1. Print out a footer and if the script was successful or not.
 2. Send an email with the results of the script.
+
+Format for config file:
+
+    [AGOL]
+    usr: lueggis
+    pwd: xxxxx
+
+    [email]
+    usr: dplugis@gmail.com
+    pwd: xxxxx
+
+    [Download_Info]
+    # Feature Service Name
+    FS_name   =
+
+    # Index of the layer in the Feature Service on AGOL that you want to download
+    FS_index =
+
+    [Paths]
+    Root_Folder =
+    Share_Folder =
+    Prod_FC_path =
 """
 #
 # Author:      mgrue
@@ -148,7 +170,7 @@ def main():
     # Full path to a text file that has the username and password of an account
     #  that has access to at least VIEW the FS in AGOL, as well as an email
     #  account that has access to send emails.
-    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Download_and_Process.ini".format(path_prefix)
+    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini".format(path_prefix)
     if os.path.isfile(cfgFile):
         config = ConfigParser.ConfigParser()
         config.read(cfgFile)
@@ -158,54 +180,53 @@ def main():
         raw_input('\nPress ENTER to end script...')
         sys.exit()
 
-    # Set the working folder, FGDBs, FCs, and Tables
-    wkg_folder            = config.get('Download_Info', 'wkg_folder')
+    # Get variables from .ini file
+    name_of_FS           = config.get('Download_Info', 'FS_name')
+    index_of_layer_in_FS = config.get('Download_Info', 'FS_index')
+    root_folder          = config.get('Paths',         'Root_Folder')
+    share_folder         = config.get('Paths',         'Share_Folder')
+    prod_FC_path         = config.get('Paths',         'Prod_FC_path')
 
-    raw_agol_FGDB_name    = config.get('Download_Info', 'FGDB_name')
-    raw_agol_FGDB_path    = '{}\{}'.format(wkg_folder, raw_agol_FGDB_name)
+    # Set the working folder, FGDBs, FCs, and Tables
+    data_folder           = '{}\Data'.format(root_folder)
+
+    raw_agol_FGDB_name    = 'DA_Fire_From_AGOL.gdb'
+    raw_agol_FGDB_path    = '{}\{}'.format(data_folder, raw_agol_FGDB_name)
 
     processing_FGDB_name  = 'DA_Fire_Processing.gdb'
-    processing_FGDB_path  = '{}\{}'.format(wkg_folder, processing_FGDB_name)
+    processing_FGDB_path  = '{}\{}'.format(data_folder, processing_FGDB_name)
 
-    AGOL_Data_DL_name = 'AGOL_Data_Last_Downloaded'
-    AGOL_Data_DL_path = '{}\{}'.format(processing_FGDB_path, AGOL_Data_DL_name)
+    AGOL_Data_DL_name     = 'AGOL_Data_Last_Downloaded'
+    AGOL_Data_DL_path     = '{}\{}'.format(processing_FGDB_path, AGOL_Data_DL_name)
 
-    parcels_extract_name  = config.get('Process_Info', 'Parcels_Extract')
+    parcels_extract_name  = 'Parcel_All_Int_DA_Reports'
     parcels_extract_path  = '{}\{}'.format(processing_FGDB_path, parcels_extract_name)
-
-    prod_FC_path          = config.get('Process_Info', 'Prod_FC_path')
 
 
     # Set txt that looks for Report Number / APN pairs (for stacked parcels)
-    match_Report_to_APN_txt  = config.get('Process_Info', 'Report_to_APN_txt')
+    match_Report_to_APN_txt  = '{}\Stacked_Parcels\DA_Match_Report_To_APN.txt'.format(share_folder)
 
     # Set info for the Excel Exports of the production database
-    excel_export_folder = config.get('Process_Info', 'excel_export_folder')
+    excel_export_folder = '{}\Excel_Exports'.format(share_folder)
     excel_file_name = 'DA_Current_Event'
 
     # Set the log file paths
-    log_file_folder = config.get('Download_Info', 'Log_File_Folder')
+    log_file_folder = '{}\Scripts\Logs'.format(root_folder)
     log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
-    QA_QC_log_folder = config.get('Process_Info', 'QA_QC_Log_Folder')
+    QA_QC_log_folder = '{}\QA_QC_Logs'.format(share_folder)
 
     # Set the path to the success/fail files
-    success_error_folder = config.get('Download_Info', 'Success_Error_Folder')
+    success_error_folder = '{}\Scripts\Source_Code\Control_Files\Success_Error'.format(root_folder)
     download_success_file = 'SUCCESS_running_DA_Download_Fire_Data.txt'  # Hard Coded into variable here
     process_success_file  = 'SUCCESS_running_{}.txt'.format(name_of_script.split('.')[0])
 
     # Set the Control_Files path
-    control_file_folder = config.get('Process_Info', 'Control_Files')
+    control_file_folder = '{}\Scripts\Source_Code\Control_Files'.format(root_folder)
     add_fields_csv      = '{}\FieldsToAdd.csv'.format(control_file_folder)
     calc_fields_csv     = '{}\FieldsToCalculate.csv'.format(control_file_folder)
 
-
     # Set the PARCELS_ALL Feature Class path
-    parcels_all = config.get('Process_Info', 'Parcels_All')
-
-
-    # Set the Survey123 Feature Service variables
-    name_of_FS           = config.get('Download_Info', 'FS_name')
-    index_of_layer_in_FS = config.get('Download_Info', 'FS_index')
+    parcels_all = '{}\Scripts\Config_Files\AD@ATLANTIC@SDE (ip addy).sde\SDE.SANGIS.PARCELS_ALL'.format(root_folder)
 
     #---------------------------------------------------------------------------
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -245,15 +266,15 @@ def main():
                 print '  The .ini file is found at:\n    {}\n'.format(cfgFile)
                 success = False
 
-            # Make sure wkg_folder exists, create it if it does not
-            if not os.path.exists(wkg_folder):
-                print 'NOTICE, Working Folder does not exist, creating it now at:\n  {}\n'.format(wkg_folder)
-                os.mkdir(wkg_folder)
+            # Make sure data_folder exists, create it if it does not
+            if not os.path.exists(data_folder):
+                print 'NOTICE, Working Folder does not exist, creating it now at:\n  {}\n'.format(data_folder)
+                os.mkdir(data_folder)
 
-            # Make sure processing FGDB exists in the wkg_folder, create it if it does not
+            # Make sure processing FGDB exists in the data_folder, create it if it does not
             if not os.path.exists(processing_FGDB_path):
                 print 'NOTICE, FGDB does not exist, creating it now at:\n  {}\n'.format(processing_FGDB_path)
-                arcpy.CreateFileGDB_management(wkg_folder, processing_FGDB_name, 'CURRENT')
+                arcpy.CreateFileGDB_management(data_folder, processing_FGDB_name, 'CURRENT')
 
             # Make sure the AGOL_Data_Last_Downloaded FC exists, create it if it does not
             if not arcpy.Exists(AGOL_Data_DL_path):
@@ -403,7 +424,7 @@ def main():
 
             # Copy the .txt file that matches Report Numbers to APNs
             #   that PDS DA Team edits to a separate folder and change to a .csv file
-            match_Report_to_APN_csv = wkg_folder + '\DA_Match_Report_To_APN_temp.csv'
+            match_Report_to_APN_csv = data_folder + '\DA_Match_Report_To_APN_temp.csv'
             print 'Copying file:\n  {}\nTo:\n  {}'.format(match_Report_to_APN_txt, match_Report_to_APN_csv)
             shutil.copyfile(match_Report_to_APN_txt, match_Report_to_APN_csv)
 
@@ -453,26 +474,30 @@ def main():
     #                     before attempting to change it
     # Delete the features in the backup database
     if success == True:
-        arcpy.CopyFeatures_management(prod_FC_path, '{}_BAK'.format(prod_FC_path))
-##        try:
-##            backup_fc = '{}_BAK'.format(prod_FC_path)
-##            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-##            print 'Backup the production features\n'
-##            Delete_Features(backup_fc)
-##        except Exception as e:
-##            success = False
-##            print '\n*** ERROR with Delete_Features() ***'
-##            print str(e)
-##
-##    # Append the features from the production database to the backup database
-##    if success == True:
-##        try:
-##            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-##            Append_Data(prod_FC_path, backup_fc)
-##        except Exception as e:
-##            success = False
-##            print '\n*** ERROR with Append_Data() ***'
-##            print str(e)
+        print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        backup_fc = '{}_BAK'.format(prod_FC_path)
+        if arcpy.Exists(backup_fc):
+            print 'Deleting features in backup FC\n'
+            try:
+                Delete_Features(backup_fc)
+            except Exception as e:
+                success = False
+                print '\n*** ERROR with Delete_Features() ***'
+                print str(e)
+        else:
+            print 'WARNING, a backup Feature Class does not exist, please make a copy of the orig FC and append "_BAK" to the name'
+
+    # Append the features from the production database to the backup database
+    if success == True:
+        if arcpy.Exists(backup_fc):
+            try:
+                print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                print 'Appending current production features into backup FC'
+                Append_Data(prod_FC_path, backup_fc)
+            except Exception as e:
+                success = False
+                print '\n*** ERROR with Append_Data() ***'
+                print str(e)
 
     #---------------------------------------------------------------------------
     #                       Append newly processed data
@@ -481,7 +506,7 @@ def main():
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            print 'Append newly processed data to the production database\n'
+            print 'Deleting features in the current production FC'
             Delete_Features(prod_FC_path)
         except Exception as e:
             success = False
@@ -492,6 +517,7 @@ def main():
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            print 'Appending newly processed features from working database to prod database'
             Append_Data(working_fc, prod_FC_path)
         except Exception as e:
             success = False

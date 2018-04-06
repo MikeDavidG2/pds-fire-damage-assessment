@@ -19,6 +19,52 @@ NOTE:
 2. Write a success or error text file to the success_error_folder so that
       subsequently called scripts will know if this script ran successfully
       or not.  This happens right before the end of script reporting.
+
+Format for config file:
+
+    [AGOL]
+    usr: lueggis
+    pwd: xxxxx
+
+    [email]
+    usr: dplugis@gmail.com
+    pwd: xxxxx
+
+    [Paths]
+    Root_Folder =
+
+    [Publish_Info_FS]
+    SERVICENAME =
+    FOLDERNAME =
+    MXD =
+    TAGS =
+    DESCRIPTION  =
+    MAXRECORDS =
+
+
+    [Publish_Info_Share]
+    # Make sure to use "True" and "False" (not "true"/"false")
+    # TODO: Change "SHARE" to "True" when want to share with EVERYONE / ORG / GROUPS.
+    SHARE =
+
+    # TODO: Change 'EVERYONE' to 'True' IF want to share with public.
+    EVERYONE =
+
+    # TODO: Change 'ORG' to 'True' IF want to share with organization.
+    ORG =
+
+    # MAKE SURE 'SHARE' = True if you want to share with groups
+    # The ID's of: 'LUEG-GIS','Damage Assessment (Editor)','Damage Assessment (Viewer)'
+    GROUPS =
+
+
+    [Publish_Info_PROXY]
+    #Shouldn't need to be changed
+    USEPROXY = False
+    SERVER = proxysrvr
+    PORT = 8888
+    USER = bandit
+    PASS = #####
 """
 import ConfigParser
 import ast
@@ -60,7 +106,8 @@ else:  # If script run directly and no called_by parameter specified
     path_prefix = 'P:'  # i.e. 'P:' or 'U:'
 
 # Name of ini file located in the same location as this script.
-cfgFile = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Publish_FS_Exec_Dashboard.ini".format(path_prefix)
+##cfgFile = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Publish_FS_Exec_Dashboard.ini".format(path_prefix)
+cfgFile = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini".format(path_prefix)
 
 if os.path.isfile(cfgFile):
     config = ConfigParser.ConfigParser()
@@ -71,13 +118,17 @@ else:
     raw_input('\nPress ENTER to end script...')
     sys.exit()
 
+# Get variables from .ini file
+root_folder = config.get('Paths', 'Root_Folder')
+
 # Set the path to the success/fail files
-success_error_folder = config.get('Success_Error', 'Success_Error_Folder')
+success_error_folder = '{}\Scripts\Source_Code\Control_Files\Success_Error'.format(root_folder)
 process_success_file = 'SUCCESS_running_DA_Process_Fire_Data.txt'  # Hard Coded into variable here
 publish_success_file  = 'SUCCESS_running_{}.txt'.format(name_of_script.split('.')[0])
 
-# Log file is a concatenation of the config file path to the log folder and the name of the script (w/o the .py)
-log_file = '{}\{}'.format(config.get('Log_File', 'Log_File_Folder'), name_of_script.split('.')[0])
+# Log file is a concatenation of the path to the log folder and the name of the script (w/o the .py)
+log_file_folder = '{}\Scripts\Logs'.format(root_folder)
+log_file = '{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
 
 # Permissions
 permissions_to_set = "Query"  # <Full permissions = "Query,Create,Update,Delete,Uploads,Editing,Sync">
@@ -624,7 +675,7 @@ if __name__ == "__main__":
     print("Starting Feature Service publish process")
 
     # Turn all 'print' statements into a log-writing object
-    Write_Print_To_Log(log_file)
+    orig_stdout = Write_Print_To_Log(log_file)
 
     # If this script was called with a batch file, make sure that the data
     # was processed successfully before trying to process it.
@@ -660,35 +711,35 @@ if __name__ == "__main__":
             sys.exit()
 
         # AGOL Credentials
-        inputUsername = config.get('AGOL', 'USER')
-        inputPswd = config.get('AGOL', 'PASS')
+        inputUsername = config.get('AGOL', 'usr')
+        inputPswd = config.get('AGOL', 'pwd')
 
         # FS values
-        MXD = config.get('FS_INFO', 'MXD')
-        serviceName = config.get('FS_INFO', 'SERVICENAME')
-        folderName = config.get('FS_INFO', 'FOLDERNAME')
-        tags = config.get('FS_INFO', 'TAGS')
-        summary = config.get('FS_INFO', 'DESCRIPTION')
-        maxRecords = config.get('FS_INFO', 'MAXRECORDS')
+        MXD = config.get('Publish_Info_FS', 'MXD')
+        serviceName = config.get('Publish_Info_FS', 'SERVICENAME')
+        folderName = config.get('Publish_Info_FS', 'FOLDERNAME')
+        tags = config.get('Publish_Info_FS', 'TAGS')
+        summary = config.get('Publish_Info_FS', 'DESCRIPTION')
+        maxRecords = config.get('Publish_Info_FS', 'MAXRECORDS')
 
         # Share FS to: everyone, org, groups
-        shared = config.get('FS_SHARE', 'SHARE')
-        everyone = config.get('FS_SHARE', 'EVERYONE')
-        orgs = config.get('FS_SHARE', 'ORG')
-        groups = config.get('FS_SHARE', 'GROUPS')  # Groups are by ID. Multiple groups comma separated
+        shared = config.get('Publish_Info_Share', 'SHARE')
+        everyone = config.get('Publish_Info_Share', 'EVERYONE')
+        orgs = config.get('Publish_Info_Share', 'ORG')
+        groups = config.get('Publish_Info_Share', 'GROUPS')  # Groups are by ID. Multiple groups comma separated
 
-        use_prxy = config.get('PROXY', 'USEPROXY')
-        pxy_srvr = config.get('PROXY', 'SERVER')
-        pxy_port = config.get('PROXY', 'PORT')
-        pxy_user = config.get('PROXY', 'USER')
-        pxy_pass = config.get('PROXY', 'PASS')
+        use_prxy = config.get('Publish_Info_PROXY', 'USEPROXY')
+        pxy_srvr = config.get('Publish_Info_PROXY', 'SERVER')
+        pxy_port = config.get('Publish_Info_PROXY', 'PORT')
+        pxy_user = config.get('Publish_Info_PROXY', 'USER')
+        pxy_pass = config.get('Publish_Info_PROXY', 'PASS')
 
         proxyDict = {}
         if ast.literal_eval(use_prxy):
             http_proxy = "http://" + pxy_user + ":" + pxy_pass + "@" + pxy_srvr + ":" + pxy_port
             https_proxy = "http://" + pxy_user + ":" + pxy_pass + "@" + pxy_srvr + ":" + pxy_port
             ftp_proxy = "http://" + pxy_user + ":" + pxy_pass + "@" + pxy_srvr + ":" + pxy_port
-            proxyDict = {"http": http_proxy, "https": https_proxy, "ftp": ftp_proxy}
+            proxyDict = {"phttp": http_proxy, "https": https_proxy, "ftp": ftp_proxy}
 
         # create a temp directory under the script
         tempDir = os.path.join(localPath, "tempDir")
