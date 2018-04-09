@@ -71,6 +71,7 @@ import ast
 import os
 import sys
 import time
+import datetime
 
 import urllib2
 import urllib
@@ -133,6 +134,8 @@ log_file = '{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
 # Permissions
 permissions_to_set = "Query"  # <Full permissions = "Query,Create,Update,Delete,Uploads,Editing,Sync">
 
+email_admin_ls = ['Michael.Grue@sdcounty.ca.gov']
+
 success = True
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -186,7 +189,7 @@ def Write_Print_To_Log(log_file):
     print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n'
 
 
-    return orig_stdout
+    return orig_stdout, log_file_date
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -216,6 +219,67 @@ def Get_DT_To_Append():
 
     print 'Finished Get_DT_To_Append()\n'
     return dt_to_append
+
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#                               Function Email_W_Body()
+def Email_W_Body(subj, body, email_list, cfgFile):
+
+    """
+    PARAMETERS:
+      subj (str): Subject of the email
+      body (str): Body of the email in HTML.  Can be a simple string, but you
+        can use HTML markup like <b>bold</b>, <i>italic</i>, <br>carriage return
+        <h1>Header 1</h1>, etc.
+      email_list (str): List of strings that contains the email addresses to
+        send the email to.
+      cfgFile (str): Path to a config file with username and password.
+        The format of the config file should be as below with
+        <username> and <password> completed:
+
+          [email]
+          usr: <username>
+          pwd: <password>
+
+        OPTIONAL. A default will be used if one isn't given.
+
+    RETURNS:
+      None
+
+    FUNCTION: To send an email to the listed recipients.
+      If you want to provide a log file to include in the body of the email,
+      please use function Email_w_LogFile()
+    """
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    import ConfigParser, smtplib
+
+    print '  Starting Email_W_Body()'
+    print '    With Subject: {}'.format(subj)
+
+    # Set the subj, From, To, and body
+    msg = MIMEMultipart()
+    msg['Subject']   = subj
+    msg['From']      = "Python Script"
+    msg['To']        = ', '.join(email_list)  # Join each item in list with a ', '
+    msg.attach(MIMEText(body, 'html'))
+
+    # Get username and password from cfgFile
+    config = ConfigParser.ConfigParser()
+    config.read(cfgFile)
+    email_usr = config.get('email', 'usr')
+    email_pwd = config.get('email', 'pwd')
+
+    # Send the email
+    ##print '  Sending the email to:  {}'.format(', '.join(email_list))
+    SMTP_obj = smtplib.SMTP('smtp.gmail.com',587)
+    SMTP_obj.starttls()
+    SMTP_obj.login(email_usr, email_pwd)
+    SMTP_obj.sendmail(email_usr, email_list, msg.as_string())
+    SMTP_obj.quit()
+    time.sleep(2)
+
+    print '  Successfully emailed results.'
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -675,7 +739,7 @@ if __name__ == "__main__":
     print("Starting Feature Service publish process")
 
     # Turn all 'print' statements into a log-writing object
-    orig_stdout = Write_Print_To_Log(log_file)
+    orig_stdout, log_file_date = Write_Print_To_Log(log_file)
 
     # If this script was called with a batch file, make sure that the data
     # was processed successfully before trying to process it.
@@ -781,7 +845,7 @@ if __name__ == "__main__":
 
         # Write the file
         file_path = '{}\{}'.format(success_error_folder, file_name)
-        print '\nCreating file:\n  {}'.format(file_path)
+        print '\nCreating file:\n  {}\n'.format(file_path)
         open(file_path, 'w')
 
     except Exception as e:
@@ -789,10 +853,42 @@ if __name__ == "__main__":
         print '*** ERROR with Writing a Success or Fail file() ***'
         print str(e)
 
-    # End of script reporting
-    print '\nEnd of script.\nSuccess = {}'.format(success)
-    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    sys.stdout = orig_stdout
-    print 'End of script.\nSuccess = {}'.format(success)
+    #---------------------------------------------------------------------------
+    # Email recipients
+    if success == True:
+        subj = 'SUCCESS running {}'.format(name_of_script)
+        body = """Success<br>
+        The Log is found at: {}""".format(log_file_date)
 
-##    raw_input('Press "ENTER" to continue...')
+    else:
+        subj = 'ERROR running {}'.format(name_of_script)
+        body = """There was an error with this script.<br>
+        Please see the log file for more info.<br>
+        The Log file is found at: {}""".format(log_file_date)
+
+    try:
+        Email_W_Body(subj, body, email_admin_ls, cfgFile)
+    except Exception as e:
+        print 'WARNING! Email not sent.  This is to be expected if the script'
+        print 'is running on a server w/o email capabilities.  Error msg:\n  {}'.format(str(e))
+
+    #---------------------------------------------------------------------------
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    #---------------------------------------------------------------------------
+    # Footer for log file
+    finish_time_str = [datetime.datetime.now().strftime('%m/%d/%Y  %I:%M:%S %p')][0]
+    print '\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+    print '                    {}'.format(finish_time_str)
+    print '              Finished {}'.format(name_of_script)
+    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+
+    # End of script reporting
+    print 'Success = {}'.format(success)
+    sys.stdout = orig_stdout
+
+    if success == True:
+        print '\nSUCCESSFULLY ran {}'.format(name_of_script)
+        print 'Please find log file at:\n  {}\n'.format(log_file_date)
+    else:
+        print '\n*** ERROR with {} ***'.format(name_of_script)
+        print 'Please find log file at:\n  {}\n'.format(log_file_date)

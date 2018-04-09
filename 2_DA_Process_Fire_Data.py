@@ -186,6 +186,7 @@ def main():
     root_folder          = config.get('Paths',         'Root_Folder')
     share_folder         = config.get('Paths',         'Share_Folder')
     prod_FC_path         = config.get('Paths',         'Prod_FC_path')
+    parcels_all          = config.get('Paths',         'Parcels_All')
 
     # Set the working folder, FGDBs, FCs, and Tables
     data_folder           = '{}\Data'.format(root_folder)
@@ -204,16 +205,16 @@ def main():
 
 
     # Set txt that looks for Report Number / APN pairs (for stacked parcels)
-    match_Report_to_APN_txt  = '{}\Stacked_Parcels\DA_Match_Report_To_APN.txt'.format(share_folder)
+    match_Report_to_APN_txt  = '{}\Stacked_Parcels_Input\DA_Match_Report_To_APN.txt'.format(share_folder)
 
     # Set info for the Excel Exports of the production database
-    excel_export_folder = '{}\Excel_Exports'.format(share_folder)
+    excel_export_folder = '{}\Processed_Assessments_Excel_Exports'.format(share_folder)
     excel_file_name = 'DA_Current_Event'
 
     # Set the log file paths
     log_file_folder = '{}\Scripts\Logs'.format(root_folder)
     log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
-    QA_QC_log_folder = '{}\QA_QC_Logs'.format(share_folder)
+    QA_QC_log_folder = '{}\QA_QC_Logs_Exports'.format(share_folder)
 
     # Set the path to the success/fail files
     success_error_folder = '{}\Scripts\Source_Code\Control_Files\Success_Error'.format(root_folder)
@@ -224,9 +225,6 @@ def main():
     control_file_folder = '{}\Scripts\Source_Code\Control_Files'.format(root_folder)
     add_fields_csv      = '{}\FieldsToAdd.csv'.format(control_file_folder)
     calc_fields_csv     = '{}\FieldsToCalculate.csv'.format(control_file_folder)
-
-    # Set the PARCELS_ALL Feature Class path
-    parcels_all = '{}\Scripts\Config_Files\AD@ATLANTIC@SDE (ip addy).sde\SDE.SANGIS.PARCELS_ALL'.format(root_folder)
 
     #---------------------------------------------------------------------------
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -575,13 +573,32 @@ def main():
 
         # Write the file
         file_path = '{}\{}'.format(success_error_folder, file_name)
-        print '\nCreating file:\n  {}'.format(file_path)
+        print '\nCreating file:\n  {}\n'.format(file_path)
         open(file_path, 'w')
 
     except Exception as e:
         success = False
         print '*** ERROR with Writing a Success or Fail file() ***'
         print str(e)
+
+    #---------------------------------------------------------------------------
+    # Email recipients
+    if success == True:
+        subj = 'SUCCESS running {}'.format(name_of_script)
+        body = """Success<br>
+        The Log is found at: {}""".format(log_file_date)
+
+    else:
+        subj = 'ERROR running {}'.format(name_of_script)
+        body = """There was an error with this script.<br>
+        Please see the log file for more info.<br>
+        The Log file is found at: {}""".format(log_file_date)
+
+    try:
+        Email_W_Body(subj, body, email_admin_ls, cfgFile)
+    except Exception as e:
+        print 'WARNING! Email not sent.  This is to be expected if the script'
+        print 'is running on a server w/o email capabilities.  Error msg:\n  {}'.format(str(e))
 
     #---------------------------------------------------------------------------
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -596,20 +613,6 @@ def main():
     # End of script reporting
     print 'Success = {}'.format(success)
     sys.stdout = orig_stdout
-
-    # Email recipients
-    if success == True:
-        subj = 'SUCCESS running {}'.format(name_of_script)
-        body = """Success<br>
-        The Log is found at: {}""".format(log_file_date)
-
-    else:
-        subj = 'ERROR running {}'.format(name_of_script)
-        body = """There was an error with this script.<br>
-        Please see the log file for more info.<br>
-        The Log file is found at: {}""".format(log_file_date)
-
-    Email_W_Body(subj, body, email_admin_ls, cfgFile)
 
     if success == True:
         print '\nSUCCESSFULLY ran {}'.format(name_of_script)

@@ -116,7 +116,7 @@ def main():
     log_file = r'{}\{}'.format(log_file_folder, name_of_script.split('.')[0])
 
     # Set the data paths
-    Attachment_Folder = '{}\Attachments'.format(share_folder)
+    Attachment_Folder = '{}\Field_Pics_Exports'.format(share_folder)
 
     # Set the path to the success/fail files
     success_error_folder = '{}\Scripts\Source_Code\Control_Files\Success_Error'.format(root_folder)
@@ -204,18 +204,6 @@ def main():
         print str(e)
 
     #---------------------------------------------------------------------------
-    # Footer for log file
-    finish_time_str = [datetime.datetime.now().strftime('%m/%d/%Y  %I:%M:%S %p')][0]
-    print '\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
-    print '                    {}'.format(finish_time_str)
-    print '              Finished {}'.format(name_of_script)
-    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
-
-    # End of script reporting
-    print 'Success = {}'.format(success)
-    sys.stdout = orig_stdout
-
-
     # Email recipients
     if success == True:
         subj = 'SUCCESS running {}'.format(name_of_script)
@@ -236,7 +224,23 @@ def main():
         'nnnnnn' is a unique ID (frequently HHMMSS, but could be a random unique ID depending on the device).<br>
         'pic_X' is the name of the field the picture belongs to.""".format(log_file_date)
 
-    Email_W_Body(subj, body, email_admin_ls, cfgFile)
+    try:
+        Email_W_Body(subj, body, email_admin_ls, cfgFile)
+    except Exception as e:
+        print 'WARNING! Email not sent.  This is to be expected if the script'
+        print 'is running on a server w/o email capabilities.  Error msg:\n  {}'.format(str(e))
+
+    #---------------------------------------------------------------------------
+    # Footer for log file
+    finish_time_str = [datetime.datetime.now().strftime('%m/%d/%Y  %I:%M:%S %p')][0]
+    print '\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+    print '                    {}'.format(finish_time_str)
+    print '              Finished {}'.format(name_of_script)
+    print '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+
+    # End of script reporting
+    print 'Success = {}'.format(success)
+    sys.stdout = orig_stdout
 
     # End of script reporting
     if success == True:

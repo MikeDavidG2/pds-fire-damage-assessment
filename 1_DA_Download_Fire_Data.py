@@ -237,13 +237,31 @@ def main():
 
         # Write the file
         file_path = '{}\{}'.format(success_error_folder, file_name)
-        print '\nCreating file:\n  {}'.format(file_path)
+        print '\nCreating file:\n  {}\n'.format(file_path)
         open(file_path, 'w')
 
     except Exception as e:
         success = False
         print '*** ERROR with Writing a Success or Fail file() ***'
         print str(e)
+
+    #---------------------------------------------------------------------------
+    # Email recipients
+    if success == True:
+        subj = 'SUCCESS running {}'.format(name_of_script)
+        body = """Success<br>
+        The Log file is at: {}""".format(log_file_date)
+
+    else:
+        subj = 'ERROR running {}'.format(name_of_script)
+        body = """There was an error with this script.<br>
+        Please see the log file for more info.<br>
+        The Log file is at: {}""".format(log_file_date)
+    try:
+        Email_W_Body(subj, body, email_admin_ls, cfgFile)
+    except Exception as e:
+        print 'WARNING! Email not sent.  This is to be expected if the script'
+        print 'is running on a server w/o email capabilities.  Error msg:\n  {}'.format(str(e))
 
     #---------------------------------------------------------------------------
     # Footer for log file
@@ -256,20 +274,6 @@ def main():
     # End of script reporting
     print 'Success = {}'.format(success)
     sys.stdout = orig_stdout
-
-    # Email recipients
-    if success == True:
-        subj = 'SUCCESS running {}'.format(name_of_script)
-        body = """Success<br>
-        The Log file is at: {}""".format(log_file_date)
-
-    else:
-        subj = 'ERROR running {}'.format(name_of_script)
-        body = """There was an error with this script.<br>
-        Please see the log file for more info.<br>
-        The Log file is at: {}""".format(log_file_date)
-
-    Email_W_Body(subj, body, email_admin_ls, cfgFile)
 
     if success == True:
         print '\nSUCCESSFULLY ran {}'.format(name_of_script)
@@ -631,8 +635,8 @@ def Email_W_Body(subj, body, email_list, cfgFile=
     from email.mime.multipart import MIMEMultipart
     import ConfigParser, smtplib
 
-    print '  Starting Email_W_Body()'
-    print '    With Subject: {}'.format(subj)
+    print 'Starting Email_W_Body()'
+    print '  With Subject: {}'.format(subj)
 
     # Set the subj, From, To, and body
     msg = MIMEMultipart()
@@ -656,7 +660,7 @@ def Email_W_Body(subj, body, email_list, cfgFile=
     SMTP_obj.quit()
     time.sleep(2)
 
-    print '  Successfully emailed results.'
+    print 'Successfully emailed results.'
 
 #-------------------------------------------------------------------------------
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
