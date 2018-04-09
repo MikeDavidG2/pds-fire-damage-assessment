@@ -70,25 +70,25 @@ def main():
     # Name of this script
     name_of_script = 'DA_Download_Fire_Data.py'
 
-    # If this script is being called by a batch file that is a schedule task
-    # that batch file can pass a parameter "SCHEDULED" to this script.  This will
-    # Allow the script to set the correct prefix path.  If the batch file is
-    # clicked by a user, then the parameter "MANUAL" can be passed to this script
-    # which will allow the script to set the correct prefix path for a non-server
-    # called script.  OR you can run the script directly and set the prefix
-    # path to a non-server called script.
-    called_by = arcpy.GetParameterAsText(0)
-
-    # Set the path prefix depending on if this script is called manually by a
-    #  user, or called by a scheduled task on ATLANTIC server.
-    if called_by == 'MANUAL':
-        path_prefix = 'P:'
-
-    elif called_by == 'SCHEDULED':
-        path_prefix = 'P:'
-
-    else:  # If script run directly and no called_by parameter is specified
-        path_prefix = 'P:'
+##    # If this script is being called by a batch file that is a schedule task
+##    # that batch file can pass a parameter "SCHEDULED" to this script.  This will
+##    # Allow the script to set the correct prefix path.  If the batch file is
+##    # clicked by a user, then the parameter "MANUAL" can be passed to this script
+##    # which will allow the script to set the correct prefix path for a non-server
+##    # called script.  OR you can run the script directly and set the prefix
+##    # path to a non-server called script.
+##    called_by = arcpy.GetParameterAsText(0)
+##
+##    # Set the path prefix depending on if this script is called manually by a
+##    #  user, or called by a scheduled task on ATLANTIC server.
+##    if called_by == 'MANUAL':
+##        path_prefix = 'P:'
+##
+##    elif called_by == 'SCHEDULED':
+##        path_prefix = 'P:'
+##
+##    else:  # If script run directly and no called_by parameter is specified
+##        path_prefix = 'P:'
 
     #---------------------------------------------------------------------------
     #---------------------------------------------------------------------------
@@ -97,8 +97,12 @@ def main():
         # Full path to a text file that has the username and password of an account
         #  that has access to at least VIEW the FS in AGOL, as well as an email
         #  account that has access to send emails.
-        cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini".format(path_prefix)
+        cfgFile     = r"P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini"
+        if not os.path.exists(cfgFile):  # Try another path for the ini file
+            cfgFile = r"C:\Users\mgrue\Desktop\DA_Main_Config_File.ini"
+
         if os.path.isfile(cfgFile):
+            print 'Using INI file found at: {}'.format(cfgFile)
             config = ConfigParser.ConfigParser()
             config.read(cfgFile)
         else:

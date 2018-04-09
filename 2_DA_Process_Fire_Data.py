@@ -141,18 +141,18 @@ def main():
     #---------------------------------------------------------------------------
     #                     Set Variables that will change
 
-    # Set the path prefix depending on if this script is called manually by a
-    #  user, or called by a scheduled task on ATLANTIC server.
-    called_by = arcpy.GetParameterAsText(0)
-
-    if called_by == 'MANUAL':
-        path_prefix = 'P:'  # i.e. 'P:' or 'U:'
-
-    elif called_by == 'SCHEDULED':
-        path_prefix = 'D:\projects'  # i.e. 'D:\projects' or 'D:\users'
-
-    else:  # If script run directly and no called_by parameter specified
-        path_prefix = 'P:'  # i.e. 'P:' or 'U:'
+##    # Set the path prefix depending on if this script is called manually by a
+##    #  user, or called by a scheduled task on ATLANTIC server.
+##    called_by = arcpy.GetParameterAsText(0)
+##
+##    if called_by == 'MANUAL':
+##        path_prefix = 'P:'  # i.e. 'P:' or 'U:'
+##
+##    elif called_by == 'SCHEDULED':
+##        path_prefix = 'D:\projects'  # i.e. 'D:\projects' or 'D:\users'
+##
+##    else:  # If script run directly and no called_by parameter specified
+##        path_prefix = 'P:'  # i.e. 'P:' or 'U:'
 
     # Name of this script
     name_of_script = 'DA_Process_Fire_Data.py'
@@ -170,15 +170,18 @@ def main():
     # Full path to a text file that has the username and password of an account
     #  that has access to at least VIEW the FS in AGOL, as well as an email
     #  account that has access to send emails.
-    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini".format(path_prefix)
+    cfgFile     = r"P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini"
+    if not os.path.exists(cfgFile):  # Try another path for the ini file
+        cfgFile = r"C:\Users\mgrue\Desktop\DA_Main_Config_File.ini"
+
     if os.path.isfile(cfgFile):
+        print 'Using INI file found at: {}'.format(cfgFile)
         config = ConfigParser.ConfigParser()
         config.read(cfgFile)
     else:
         print("*** ERROR! cannot find valid INI file ***\nMake sure a valid INI file exists at:\n\n{}\n".format(cfgFile))
         print 'You may have to change the name/location of the INI file,\nOR change the variable in the script.'
-        raw_input('\nPress ENTER to end script...')
-        sys.exit()
+        success = False
 
     # Get variables from .ini file
     name_of_FS           = config.get('Download_Info', 'FS_name')
@@ -226,6 +229,8 @@ def main():
     add_fields_csv      = '{}\FieldsToAdd.csv'.format(control_file_folder)
     calc_fields_csv     = '{}\FieldsToCalculate.csv'.format(control_file_folder)
 
+    arcpy_version = arcpy.GetInstallInfo()['Version']
+    print 'Arcpy Version: {}'.format(arcpy_version)
     #---------------------------------------------------------------------------
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     #---------------------------------------------------------------------------
@@ -237,13 +242,13 @@ def main():
         os.mkdir(log_file_folder)
 
     # Turn all 'print' statements into a log-writing object
-    if success == True:
-        try:
-            orig_stdout, log_file_date, dt_to_append = Write_Print_To_Log(log_file, name_of_script)
-        except Exception as e:
-            success = False
-            print '\n*** ERROR with Write_Print_To_Log() ***'
-            print str(e)
+    try:
+        orig_stdout, log_file_date, dt_to_append = Write_Print_To_Log(log_file, name_of_script)
+    except Exception as e:
+        success = False
+        print '\n*** ERROR with Write_Print_To_Log() ***'
+        print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     #                         Check Folder Schema.
@@ -324,27 +329,24 @@ def main():
             success = False
             print '\n*** ERROR with Check Folder Schema ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
-    # If this script was called with a batch file, make sure that the data
-    # was downloaded successfully before trying to process it.
+    # Make sure that the data was downloaded successfully before trying to process it.
     if success == True:
-        if called_by != '':
-            print 'Checking to see if the AGOL data was downloaded successfully:'
-
-            if os.path.exists('{}\{}'.format(success_error_folder, download_success_file)):
-                print '\n  DA_Download_Fire_Data.py was run successfully, processing the data now\n'
-                sys.stdout.flush()
-            else:
-                success = False
-                print '\n*** ERROR! ***'
-                print '  This script is designed to process data that was downloaded by a previously run script: "DA_Download_Fire_Data.py"'
-                print '  If it was completed successfully, The "DA_Download_Fire_Data.py" script should have written a file named:\n    {}'.format(download_success_file)
-                print '  At:\n    {}'.format(success_error_folder)
-                print '\n  It appears that the above file does not exist, meaning that the Download script had an error.'
-                print '  This script will not run if there was an error in "DA_Download_Fire_Data.py"'
-                print '  Please fix any problems with that script first. Then try again.'
-                print '  You can find the log files at:\n    {}'.format(log_file_folder)
+        if os.path.exists('{}\{}'.format(success_error_folder, download_success_file)):
+            print '\n  DA_Download_Fire_Data.py was run successfully, processing the data now\n'
+            sys.stdout.flush()
+        else:
+            success = False
+            print '\n*** ERROR! ***'
+            print '  This script is designed to process data that was downloaded by a previously run script: "DA_Download_Fire_Data.py"'
+            print '  If it was completed successfully, The "DA_Download_Fire_Data.py" script should have written a file named:\n    {}'.format(download_success_file)
+            print '  At:\n    {}'.format(success_error_folder)
+            print '\n  It appears that the above file does not exist, meaning that the Download script had an error.'
+            print '  This script will not run if there was an error in "DA_Download_Fire_Data.py"'
+            print '  Please fix any problems with that script first. Then try again.'
+            print '  You can find the log files at:\n    {}'.format(log_file_folder)
 
     # Get the path to the most recently downloaded data
     if success == True:
@@ -363,6 +365,7 @@ def main():
             success = False
             print '\n*** ERROR with Get_Newest_Data() ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Set the date that the data was most recently downloaded
@@ -374,6 +377,7 @@ def main():
             success = False
             print '\n*** ERROR with Set_Date_Data_DL() ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Get an extract of all parcels that intersect with the DA Reports
@@ -393,6 +397,7 @@ def main():
             success = False
             print '\n*** ERROR with Extract_Parcels() ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Spatially Join the DA Reports with the parcels_extract_path
@@ -412,6 +417,7 @@ def main():
             success = False
             print '\n*** ERROR with Join_2_FC_By_Spatial_Join() ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Handle data on a stacked parcel.
@@ -432,6 +438,7 @@ def main():
             success = False
             print '\n*** ERROR with Handle_Stacked_Parcels() ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Add Fields to downloaded DA Fire Data
@@ -443,6 +450,7 @@ def main():
             success = False
             print '\n*** ERROR with Fields_Add_Fields() ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Calculate Fields
@@ -454,18 +462,20 @@ def main():
             success = False
             print '\n*** ERROR with Fields_Calculate_Fields() ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # QA/QC the data
     if success == True:
         try:
             print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            success = QA_QC_Data(orig_DA_reports_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract_path, match_Report_to_APN_txt)
+            success = QA_QC_Data(orig_DA_reports_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract_path, match_Report_to_APN_txt, arcpy_version)
             os.remove(match_Report_to_APN_csv)  # Delete the temp csv file
         except Exception as e:
             success = False
             print '\n*** ERROR with QA_QC_Data() ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     #                     Backup the production features
@@ -496,6 +506,7 @@ def main():
                 success = False
                 print '\n*** ERROR with Append_Data() ***'
                 print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     #                       Append newly processed data
@@ -521,6 +532,7 @@ def main():
             success = False
             print '\n*** ERROR with Append_Data() ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     #              Export the updated prod database to an Excel file
@@ -536,6 +548,7 @@ def main():
             success = False
             print '\n*** ERROR with Export_Excel() ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     #                           Update AGOL fields
@@ -559,6 +572,7 @@ def main():
             success = False
             print '\n*** ERROR with Update_AGOL_Fields() ***'
             print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Write a file to disk to let other scripts know if this script ran
@@ -580,6 +594,7 @@ def main():
         success = False
         print '*** ERROR with Writing a Success or Fail file() ***'
         print str(e)
+    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Email recipients
@@ -620,10 +635,6 @@ def main():
     else:
         print '\n*** ERROR with {} ***'.format(name_of_script)
         print 'Please find log file at:\n  {}\n'.format(log_file_date)
-
-    if called_by == 'MANUAL':
-        ##raw_input('Press ENTER to continue')
-        pass
 
 #-------------------------------------------------------------------------------
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1557,7 +1568,7 @@ def Fields_Calculate_Fields(wkg_data, calc_fields_csv):
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #                          Function QA/QC Data
-def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract, match_Report_to_APN_txt):
+def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extract, match_Report_to_APN_txt, arcpy_version):
     """
     PARAMETERS:
       orig_fc (str): Full path to the originally downloaded AGOL data.
@@ -1576,6 +1587,9 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extr
       match_Report_to_APN_txt (str):  Full path to the file that contains
         Report Numbers and APNs that should be associated with each other.
 
+      arcpy_version (str): Version of Arcpy being run.  This can be used to dictate
+        which arcpy geoprocessing tasks will be run (Servers can have different
+        versions on them from the desktop software)
 
     RETURNS:
       success (bool):
@@ -1652,7 +1666,13 @@ def QA_QC_Data(orig_fc, working_fc, QA_QC_log_folder, dt_to_append, parcels_extr
 
         # Select features that do not intersect the parcel_extract
         arcpy.MakeFeatureLayer_management(orig_fc, 'orig_fc_lyr')
-        arcpy.SelectLayerByLocation_management('orig_fc_lyr', 'INTERSECT', parcels_extract, '', 'NEW_SELECTION', 'INVERT')
+        if arcpy_version != '10.2.2':
+            arcpy.SelectLayerByLocation_management('orig_fc_lyr', 'INTERSECT', parcels_extract, '', 'NEW_SELECTION', 'INVERT')
+        else:
+            # The 10.2.2 arcpy version doesn't have an 'INVERT' parameter, so we have to perform 2 tools to achieve the same result
+            arcpy.SelectLayerByLocation_management('orig_fc_lyr', 'INTERSECT', parcels_extract, '', 'NEW_SELECTION')
+            arcpy.SelectLayerByLocation_management('orig_fc_lyr', '', '', '', 'SWITCH_SELECTION')
+
 
         not_on_parcel_ls = []
         with arcpy.da.SearchCursor('orig_fc_lyr', ['ReportNumber']) as cursor:
@@ -2362,8 +2382,8 @@ def Email_W_Body(subj, body, email_list, cfgFile=
     from email.mime.multipart import MIMEMultipart
     import ConfigParser, smtplib
 
-    print '  Starting Email_W_Body()'
-    print '    With Subject: {}'.format(subj)
+    print 'Starting Email_W_Body()'
+    print '  With Subject: {}'.format(subj)
 
     # Set the subj, From, To, and body
     msg = MIMEMultipart()
@@ -2387,7 +2407,7 @@ def Email_W_Body(subj, body, email_list, cfgFile=
     SMTP_obj.quit()
     time.sleep(2)
 
-    print '  Successfully emailed results.'
+    print 'Successfully emailed results.'
 
 #-------------------------------------------------------------------------------
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

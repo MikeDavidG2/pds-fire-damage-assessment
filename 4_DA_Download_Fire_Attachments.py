@@ -76,28 +76,30 @@ def main():
     ##email_admin_ls = ['michael.grue@sdcounty.ca.gov', 'randy.yakos@sdcounty.ca.gov', 'gary.ross@sdcounty.ca.gov']
     email_admin_ls = ['michael.grue@sdcounty.ca.gov']  # For testing purposes
     #---------------------------------------------------------------------------
-    # Set the path prefix depending on if this script is called manually by a
-    #  user running a Batch file, or called by a scheduled task on ATLANTIC server,
-    #  or run directly through an IDE.
-    called_by = arcpy.GetParameterAsText(0)
-
-    if called_by == 'MANUAL':
-        path_prefix = 'P:'
-
-    elif called_by == 'SCHEDULED':
-        path_prefix = 'P:'
-
-    else:  # If script run directly in an IDE
-        path_prefix = 'P:'
+##    # Set the path prefix depending on if this script is called manually by a
+##    #  user running a Batch file, or called by a scheduled task on ATLANTIC server,
+##    #  or run directly through an IDE.
+##    called_by = arcpy.GetParameterAsText(0)
+##
+##    if called_by == 'MANUAL':
+##        path_prefix = 'P:'
+##
+##    elif called_by == 'SCHEDULED':
+##        path_prefix = 'P:'
+##
+##    else:  # If script run directly in an IDE
+##        path_prefix = 'P:'
 
     # Full path to a text file that has the username and password of an account
     #  that has access to at least VIEW the FS in AGOL, as well as an email
     #  account that has access to send emails.
-    cfgFile     = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini".format(path_prefix)
-
+    cfgFile     = r"P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini"
+    if not os.path.exists(cfgFile):  # Try another path for the ini file
+        cfgFile = r"C:\Users\mgrue\Desktop\DA_Main_Config_File.ini"
     #---------------------------------------------------------------------------
     # Set variables from the cfgFile
     if os.path.isfile(cfgFile):
+        print 'Using INI file found at: {}'.format(cfgFile)
         config = ConfigParser.ConfigParser()
         config.read(cfgFile)
     else:

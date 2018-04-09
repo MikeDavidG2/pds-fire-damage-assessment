@@ -93,22 +93,24 @@ import shutil
 # Name of this script
 name_of_script = 'DA_Publish_FS_Exec_Dashboard.py'
 
-# Set the path prefix depending on if this script is called manually by a
-#  user, or called by a scheduled task on ATLANTIC server.
-called_by = arcpy.GetParameterAsText(0)
-
-if called_by == 'MANUAL':
-    path_prefix = 'P:'  # i.e. 'P:' or 'U:'
-
-elif called_by == 'SCHEDULED':
-    path_prefix = 'D:\projects'  # i.e. 'D:\projects' or 'D:\users'
-
-else:  # If script run directly and no called_by parameter specified
-    path_prefix = 'P:'  # i.e. 'P:' or 'U:'
+### Set the path prefix depending on if this script is called manually by a
+###  user, or called by a scheduled task on ATLANTIC server.
+##called_by = arcpy.GetParameterAsText(0)
+##
+##if called_by == 'MANUAL':
+##    path_prefix = 'P:'  # i.e. 'P:' or 'U:'
+##
+##elif called_by == 'SCHEDULED':
+##    path_prefix = 'D:\projects'  # i.e. 'D:\projects' or 'D:\users'
+##
+##else:  # If script run directly and no called_by parameter specified
+##    path_prefix = 'P:'  # i.e. 'P:' or 'U:'
 
 # Name of ini file located in the same location as this script.
 ##cfgFile = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Publish_FS_Exec_Dashboard.ini".format(path_prefix)
-cfgFile = r"{}\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini".format(path_prefix)
+cfgFile = r"P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini"
+if not os.path.exists(cfgFile):  # Try another path for the ini file
+    cfgFile = r"C:\Users\mgrue\Desktop\DA_Main_Config_File.ini"
 
 if os.path.isfile(cfgFile):
     config = ConfigParser.ConfigParser()
@@ -741,29 +743,25 @@ if __name__ == "__main__":
     # Turn all 'print' statements into a log-writing object
     orig_stdout, log_file_date = Write_Print_To_Log(log_file)
 
-    # If this script was called with a batch file, make sure that the data
-    # was processed successfully before trying to process it.
-    if called_by != '':
-        print 'Checking to see if the AGOL data was processed successfully:'
-
-        if os.path.exists('{}\{}'.format(success_error_folder, process_success_file)):
-            print '  \nDA_Process_Fire_Data.py was run successfully, publishing the data now\n'
-            sys.stdout.flush()
-        else:
-            success = False
-            print '\n*** ERROR! ***'
-            print '  This script is designed to publish data that was processed by a previously run script: "DA_Process_Fire_Data.py"'
-            print '  If it was completed successfully, The "DA_Process_Fire_Data.py" script should have written a file named:\n    {}'.format(process_success_file)
-            print '  At:\n    {}'.format(success_error_folder)
-            print '\n  It appears that the above file does not exist, meaning that the Process script had an error.'
-            print '  This script will not run if there was an error in "DA_Process_Fire_Data.py"'
-            print '  Please fix any problems with that script first. Then try again.'
-            print '  You can find the log file at:\n    {}'.format(log_file)
+    # Make sure that the data was processed successfully before trying to process it.
+    if os.path.exists('{}\{}'.format(success_error_folder, process_success_file)):
+        print '  \nDA_Process_Fire_Data.py was run successfully, publishing the data now\n'
+        sys.stdout.flush()
+    else:
+        success = False
+        print '\n*** ERROR! ***'
+        print '  This script is designed to publish data that was processed by a previously run script: "DA_Process_Fire_Data.py"'
+        print '  If it was completed successfully, The "DA_Process_Fire_Data.py" script should have written a file named:\n    {}'.format(process_success_file)
+        print '  At:\n    {}'.format(success_error_folder)
+        print '\n  It appears that the above file does not exist, meaning that the Process script had an error.'
+        print '  This script will not run if there was an error in "DA_Process_Fire_Data.py"'
+        print '  Please fix any problems with that script first. Then try again.'
+        print '  You can find the log file at:\n    {}'.format(log_file)
 
     if success == True:
         # Find and gather settings from the ini file
         localPath = sys.path[0]
-        ##settingsFile = os.path.join(localPath, name_of_cfgFile) <MG 20180212: Commented out t oallow for full path to .ini>
+        ##settingsFile = os.path.join(localPath, name_of_cfgFile) <MG 20180212: Commented out to allow for full path to .ini>
         settingsFile = cfgFile  # <MG 20180212: Variable set at top of script>
 
         if os.path.isfile(settingsFile):
