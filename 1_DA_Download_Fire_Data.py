@@ -70,26 +70,6 @@ def main():
     # Name of this script
     name_of_script = 'DA_Download_Fire_Data.py'
 
-##    # If this script is being called by a batch file that is a schedule task
-##    # that batch file can pass a parameter "SCHEDULED" to this script.  This will
-##    # Allow the script to set the correct prefix path.  If the batch file is
-##    # clicked by a user, then the parameter "MANUAL" can be passed to this script
-##    # which will allow the script to set the correct prefix path for a non-server
-##    # called script.  OR you can run the script directly and set the prefix
-##    # path to a non-server called script.
-##    called_by = arcpy.GetParameterAsText(0)
-##
-##    # Set the path prefix depending on if this script is called manually by a
-##    #  user, or called by a scheduled task on ATLANTIC server.
-##    if called_by == 'MANUAL':
-##        path_prefix = 'P:'
-##
-##    elif called_by == 'SCHEDULED':
-##        path_prefix = 'P:'
-##
-##    else:  # If script run directly and no called_by parameter is specified
-##        path_prefix = 'P:'
-
     #---------------------------------------------------------------------------
     #---------------------------------------------------------------------------
     #                   Use cfgFile to set the below variables

@@ -131,8 +131,6 @@ Format for config file:
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 
-#TODO: test this script on the County network
-
 import arcpy, sys, datetime, os, ConfigParser, shutil, time
 arcpy.env.overwriteOutput = True
 
@@ -140,19 +138,6 @@ def main():
 
     #---------------------------------------------------------------------------
     #                     Set Variables that will change
-
-##    # Set the path prefix depending on if this script is called manually by a
-##    #  user, or called by a scheduled task on ATLANTIC server.
-##    called_by = arcpy.GetParameterAsText(0)
-##
-##    if called_by == 'MANUAL':
-##        path_prefix = 'P:'  # i.e. 'P:' or 'U:'
-##
-##    elif called_by == 'SCHEDULED':
-##        path_prefix = 'D:\projects'  # i.e. 'D:\projects' or 'D:\users'
-##
-##    else:  # If script run directly and no called_by parameter specified
-##        path_prefix = 'P:'  # i.e. 'P:' or 'U:'
 
     # Name of this script
     name_of_script = 'DA_Process_Fire_Data.py'
@@ -248,7 +233,7 @@ def main():
         success = False
         print '\n*** ERROR with Write_Print_To_Log() ***'
         print str(e)
-    sys.stdout.flush()
+
 
     #---------------------------------------------------------------------------
     #                         Check Folder Schema.
@@ -329,14 +314,14 @@ def main():
             success = False
             print '\n*** ERROR with Check Folder Schema ***'
             print str(e)
-    sys.stdout.flush()
+
 
     #---------------------------------------------------------------------------
     # Make sure that the data was downloaded successfully before trying to process it.
     if success == True:
         if os.path.exists('{}\{}'.format(success_error_folder, download_success_file)):
             print '\n  DA_Download_Fire_Data.py was run successfully, processing the data now\n'
-            sys.stdout.flush()
+
         else:
             success = False
             print '\n*** ERROR! ***'
@@ -365,7 +350,6 @@ def main():
             success = False
             print '\n*** ERROR with Get_Newest_Data() ***'
             print str(e)
-    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Set the date that the data was most recently downloaded
@@ -377,7 +361,6 @@ def main():
             success = False
             print '\n*** ERROR with Set_Date_Data_DL() ***'
             print str(e)
-    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Get an extract of all parcels that intersect with the DA Reports
@@ -397,7 +380,6 @@ def main():
             success = False
             print '\n*** ERROR with Extract_Parcels() ***'
             print str(e)
-    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Spatially Join the DA Reports with the parcels_extract_path
@@ -417,7 +399,6 @@ def main():
             success = False
             print '\n*** ERROR with Join_2_FC_By_Spatial_Join() ***'
             print str(e)
-    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Handle data on a stacked parcel.
@@ -438,7 +419,6 @@ def main():
             success = False
             print '\n*** ERROR with Handle_Stacked_Parcels() ***'
             print str(e)
-    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Add Fields to downloaded DA Fire Data
@@ -450,7 +430,6 @@ def main():
             success = False
             print '\n*** ERROR with Fields_Add_Fields() ***'
             print str(e)
-    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # Calculate Fields
@@ -462,7 +441,6 @@ def main():
             success = False
             print '\n*** ERROR with Fields_Calculate_Fields() ***'
             print str(e)
-    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
     # QA/QC the data
@@ -475,14 +453,20 @@ def main():
             success = False
             print '\n*** ERROR with QA_QC_Data() ***'
             print str(e)
-    sys.stdout.flush()
 
     #---------------------------------------------------------------------------
-    #                     Backup the production features
-    #                     before attempting to change it
+    #---------------------------------------------------------------------------
+    #          Start process to append newly processed data
+    #              from working FC to production FC
+
+    # Backup the production features before attempting to change it
     # Delete the features in the backup database
     if success == True:
         print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        print '----------------------------------------------------------------'
+        print '----------------------------------------------------------------'
+        print '       Start process to append newly processed data'
+        print '              from working FC to production FC'
         backup_fc = '{}_BAK'.format(prod_FC_path)
         if arcpy.Exists(backup_fc):
             print 'Deleting features in backup FC\n'
@@ -506,7 +490,7 @@ def main():
                 success = False
                 print '\n*** ERROR with Append_Data() ***'
                 print str(e)
-    sys.stdout.flush()
+
 
     #---------------------------------------------------------------------------
     #                       Append newly processed data
@@ -532,7 +516,16 @@ def main():
             success = False
             print '\n*** ERROR with Append_Data() ***'
             print str(e)
-    sys.stdout.flush()
+
+        print '       Finish process to append newly processed data'
+        print '              from working FC to production FC'
+        print '----------------------------------------------------------------'
+        print '----------------------------------------------------------------\n'
+
+    #          Finish process to append newly processed data
+    #              from working FC to production FC
+    #---------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
 
     #---------------------------------------------------------------------------
     #              Export the updated prod database to an Excel file
@@ -548,7 +541,7 @@ def main():
             success = False
             print '\n*** ERROR with Export_Excel() ***'
             print str(e)
-    sys.stdout.flush()
+
 
     #---------------------------------------------------------------------------
     #                           Update AGOL fields
@@ -572,7 +565,7 @@ def main():
             success = False
             print '\n*** ERROR with Update_AGOL_Fields() ***'
             print str(e)
-    sys.stdout.flush()
+
 
     #---------------------------------------------------------------------------
     # Write a file to disk to let other scripts know if this script ran
@@ -594,7 +587,7 @@ def main():
         success = False
         print '*** ERROR with Writing a Success or Fail file() ***'
         print str(e)
-    sys.stdout.flush()
+
 
     #---------------------------------------------------------------------------
     # Email recipients
@@ -627,7 +620,9 @@ def main():
 
     # End of script reporting
     print 'Success = {}'.format(success)
+    time.sleep(3)
     sys.stdout = orig_stdout
+    sys.stdout.flush()
 
     if success == True:
         print '\nSUCCESSFULLY ran {}'.format(name_of_script)
@@ -2183,10 +2178,10 @@ def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
 
     # Make a cursor that only looks at reports with an Estimated Replacement Cost
     print '\n  2) Updating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
-    print '  working_fc:\n    {}'.format(working_fc)
+    print '    working_fc:\n      {}'.format(working_fc)
     fields = ['EstimatedReplacementCost', 'ReportNumber']
     cur_where_clause = "EstimatedReplacementCost IS NOT NULL"
-    print '  Cursor Where Clause: "{}"'.format(cur_where_clause)
+    print '    Cursor Where Clause: "{}"\n'.format(cur_where_clause)
     with arcpy.da.SearchCursor(working_fc, fields, cur_where_clause) as cursor:
         for row in cursor:
             est_replcmt_cost = row[0]
@@ -2242,8 +2237,8 @@ def AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, to
     Get_Token() and are passing it to this function via the 'token' variable.
     """
 
-    print '  ------------------------------------------------------------------'
-    print "  Starting AGOL_Get_Object_Ids_Where()"
+    ##print '  ------------------------------------------------------------------'
+    ##print "  Starting AGOL_Get_Object_Ids_Where()"
     import urllib2, urllib, json
 
     # Create empty list to hold the OBJECTID's that satisfy the where clause
@@ -2259,7 +2254,7 @@ def AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, to
     get_object_id_url = query_url + query
 
     # Get the list of OBJECTID's that satisfied the where_clause
-    print '    Getting list of OBJECTID\'s that satisfied the where clause for layer:\n      {}'.format(query_url)
+    ##print '    Getting list of OBJECTID\'s that satisfied the where clause for layer:\n      {}'.format(query_url)
     print '    Where clause: "{}"'.format(where_clause)
     response = urllib2.urlopen(get_object_id_url)
     response_json_obj = json.load(response)
@@ -2271,15 +2266,15 @@ def AGOL_Get_Object_Ids_Where(name_of_FS, index_of_layer_in_FS, where_clause, to
         print '  If you receive "Invalid URL", are you sure you have the correct FS name?'
 
     if len(object_ids) > 0:
-        print '    There are "{}" features that satisfied the query.'.format(len(object_ids))
-        print '    OBJECTID\'s of those features:'
+        ##print '    There are "{}" features that satisfied the query.'.format(len(object_ids))
+        print '    OBJECTID\'s features satisfying the Where Clause:'
         for obj in object_ids:
             print '      {}'.format(obj)
 
     else:
         print '    No features satisfied the query.'
 
-    print "  Finished AGOL_Get_Object_Ids_Where()\n"
+    ##print "  Finished AGOL_Get_Object_Ids_Where()\n"
 
     return object_ids
 
@@ -2310,8 +2305,8 @@ def AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_u
       To Update features on an AGOL Feature Service.
     """
 
-    print '  ------------------------------------------------------------------'
-    print "  Starting AGOL_Update_Features()"
+    ##print '  ------------------------------------------------------------------'
+    ##print "  Starting AGOL_Update_Features()"
     import urllib2, urllib, json
 
     success = True
@@ -2326,11 +2321,11 @@ def AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_u
 
 
     # Update the features
-    print '    Updating Features in FS: {}'.format(name_of_FS)
-    print '                   At index: {}'.format(index_of_layer_in_FS)
-    print '     OBJECTID to be updated: {}'.format(object_id)
-    print '        Field to be updated: {}'.format(field_to_update)
-    print '     New value for updt fld: {}'.format(new_value)
+    ##print '    Updating Features in FS: {}'.format(name_of_FS)
+    ##print '                   At index: {}'.format(index_of_layer_in_FS)
+    print '    OBJECTID = "{}", Field to update = "{}", value for field = "{}"'.format(object_id, field_to_update, new_value)
+    ##print '        Field to be updated: {}'.format(field_to_update)
+    ##print '     New value for updt fld: {}'.format(new_value)
 
     ##print update_url + update_params
     response  = urllib2.urlopen(update_url, update_params)
@@ -2339,12 +2334,12 @@ def AGOL_Update_Features(name_of_FS, index_of_layer_in_FS, object_id, field_to_u
 
     for result in response_json_obj['updateResults']:
         ##print result
-        print '     OBJECTID: {}'.format(result['objectId'])
-        print '       Updated? {}'.format(result['success'])
+        ##print '     OBJECTID: {}'.format(result['objectId'])
+        print '      Updated? {}\n'.format(result['success'])
         if result['success'] != True:
             success = False
 
-    print '\n  Finished AGOL_Update_Features()\n'
+    ##print '\n  Finished AGOL_Update_Features()\n'
     return success
 
 #-------------------------------------------------------------------------------

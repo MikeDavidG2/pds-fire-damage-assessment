@@ -43,8 +43,6 @@ Set the following variables in the cfgFile:
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 
-# TODO: Update the script Purpose above to be more accurate.
-
 import arcpy, sys, datetime, os, ConfigParser
 arcpy.env.overwriteOutput = True
 
@@ -76,19 +74,6 @@ def main():
     ##email_admin_ls = ['michael.grue@sdcounty.ca.gov', 'randy.yakos@sdcounty.ca.gov', 'gary.ross@sdcounty.ca.gov']
     email_admin_ls = ['michael.grue@sdcounty.ca.gov']  # For testing purposes
     #---------------------------------------------------------------------------
-##    # Set the path prefix depending on if this script is called manually by a
-##    #  user running a Batch file, or called by a scheduled task on ATLANTIC server,
-##    #  or run directly through an IDE.
-##    called_by = arcpy.GetParameterAsText(0)
-##
-##    if called_by == 'MANUAL':
-##        path_prefix = 'P:'
-##
-##    elif called_by == 'SCHEDULED':
-##        path_prefix = 'P:'
-##
-##    else:  # If script run directly in an IDE
-##        path_prefix = 'P:'
 
     # Full path to a text file that has the username and password of an account
     #  that has access to at least VIEW the FS in AGOL, as well as an email
@@ -250,10 +235,6 @@ def main():
     else:
         print '*** ERROR with {} ***'.format(name_of_script)
         print 'Please see log file (noted above) for troubleshooting\n'
-
-    if called_by == 'MANUAL':
-        ##raw_input('Press ENTER to continue')
-        pass
 
 #-------------------------------------------------------------------------------
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
