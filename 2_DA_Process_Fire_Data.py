@@ -580,6 +580,7 @@ def main():
 
         # Write the file
         file_path = '{}\{}'.format(success_error_folder, file_name)
+        print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         print '\nCreating file:\n  {}\n'.format(file_path)
         open(file_path, 'w')
 
@@ -866,7 +867,7 @@ def Extract_Parcels(parcels_all, related_fc, parcels_int_related_fc):
     print 'Starting Extract_Parcels()'
 
     print '  PARCELS_ALL FC path:\n    {}'.format(parcels_all)
-    print '  Related FC used to select parcels:\n    {}'.format(related_fc)
+    print '  Related FC used to select parcels:\n    {}\n'.format(related_fc)
 
     # Delete the existing features
     print '  Deleting the old existing parcels at:\n    {}'.format(parcels_int_related_fc)
@@ -2175,6 +2176,10 @@ def Update_AGOL_Fields(name_of_FS, index_of_layer_in_FS, token, working_fc):
     #              in field [EstimatedReplacementCost]
     #         to equal the [EstimatedReplacementCost] value
     #             for that feature in the working_fc
+
+    # TODO: Find out how to speed this function up.  Do we really need to calc
+    #   the AGOL fields?  Do we need these fields in AGOL in the first place,
+    #   or can the fields be added and calculated during processing?
 
     # Make a cursor that only looks at reports with an Estimated Replacement Cost
     print '\n  2) Updating (in AGOL) all records with the working_fc EstimatedReplacementCost value'
