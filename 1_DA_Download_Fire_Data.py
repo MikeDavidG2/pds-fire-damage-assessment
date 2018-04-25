@@ -77,7 +77,7 @@ def main():
         # Full path to a text file that has the username and password of an account
         #  that has access to at least VIEW the FS in AGOL, as well as an email
         #  account that has access to send emails.
-        cfgFile     = r"P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini"
+        cfgFile     = r"P:\Damage_Assessment_GIS\Fire_Damage_Assessment\PROD\Scripts\Config_Files\DA_Main_Config_File.ini"
         if not os.path.exists(cfgFile):  # Try another path for the ini file
             cfgFile = r"C:\Users\mgrue\Desktop\DA_Main_Config_File.ini"
 

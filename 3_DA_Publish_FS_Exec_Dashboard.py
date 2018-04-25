@@ -94,7 +94,7 @@ import shutil
 name_of_script = 'DA_Publish_FS_Exec_Dashboard.py'
 
 # Name of ini file located in the same location as this script.
-cfgFile = r"P:\Damage_Assessment_GIS\Fire_Damage_Assessment\DEV\Scripts\Config_Files\DA_Main_Config_File.ini"
+cfgFile = r"P:\Damage_Assessment_GIS\Fire_Damage_Assessment\PROD\Scripts\Config_Files\DA_Main_Config_File.ini"
 if not os.path.exists(cfgFile):  # Try another path for the ini file
     cfgFile = r"C:\Users\mgrue\Desktop\DA_Main_Config_File.ini"
 
