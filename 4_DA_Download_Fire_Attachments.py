@@ -519,13 +519,11 @@ def Get_Attachments(token, gaURL, gaFolder, attachment_name_prefix, use_field_to
     JsonFileName = 'Temp_Attachment_JSON.json'
 
     # Save the file
-    # NOTE: the file is saved to the 'current working directory' + 'JsonFileName'
-    urllib.urlretrieve(replicaUrl_token, JsonFileName)
+    # NOTE: the file is saved to the 'faFolder' + 'JsonFileName'
+    jsonFilePath = gaFolder + '\\' + JsonFileName # Path to the downloaded json file
+    urllib.urlretrieve(replicaUrl_token, jsonFilePath)
 
-    # Allow the script to access the saved JSON file
-    cwd = os.getcwd()  # Get the current working directory
-    jsonFilePath = cwd + '\\' + JsonFileName # Path to the downloaded json file
-    ##print '  Temp JSON file saved to: ' + jsonFilePath
+    ##print '  Temp JSON file saved to: ' + jsonFilePath  # For testing purposes
 
     #---------------------------------------------------------------------------
     #                       Save the attachments
