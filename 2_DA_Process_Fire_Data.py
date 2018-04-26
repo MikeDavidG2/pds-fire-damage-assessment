@@ -328,7 +328,7 @@ def main():
                 print '***   with one of the APNs that the DA Report point is on.'
                 print '***   because this file is missing and was created by the script, all of the DA Reports that were on a stacked parcel will'
                 print '***   not have any APN information.  The QA/QC file will also let you know which reports were on stacked parcels'
-                print '*** In order to have a DA Report keep its APN information, PDS DA or LUEG-GIS staff should add each Report Number in the QA/QC file
+                print '*** In order to have a DA Report keep its APN information, PDS DA or LUEG-GIS staff should add each Report Number in the QA/QC file'
                 print '***   and the associated APN to the newly created text file then rerun this script (or series of scripts)'
 
                 f = open(match_Report_to_APN_txt, 'w+')
