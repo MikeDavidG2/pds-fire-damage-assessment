@@ -193,7 +193,8 @@ def main():
 
 
     # Set txt that looks for Report Number / APN pairs (for stacked parcels)
-    match_Report_to_APN_txt  = '{}\Stacked_Parcels_Input\DA_Match_Report_To_APN.txt'.format(share_folder)
+    match_Report_to_APN_folder = '{}\Stacked_Parcels_Input'.format(share_folder)
+    match_Report_to_APN_txt  = '{}\DA_Match_Report_To_APN.txt'.format(match_Report_to_APN_folder)
 
     # Set info for the Excel Exports of the production database
     excel_export_folder = '{}\Processed_Assessments_Excel_Exports'.format(share_folder)
@@ -300,6 +301,11 @@ def main():
                 #   script expects for it to be.
                 arcpy.CopyFeatures_management(par_lyr, parcels_extract_path)
 
+            # Make sure the share_folder exists, create it if it does not
+            if not os.path.exists(share_folder):
+                print 'NOTICE, the share_folder doesn\'t exist, creating it now at:\n  {}\n'.format(share_folder)
+                os.mkdir(share_folder)
+
             # Make sure the QA_QC_log_folder exists, create it if it does not
             if not os.path.exists(QA_QC_log_folder):
                 print 'NOTICE, QA/QC log folder doesn\'t exist, creating it now at:\n  {}\n'.format(QA_QC_log_folder)
@@ -310,11 +316,38 @@ def main():
                 print 'NOTICE, Excel export folder doesn\'t exist, creating it now at:\n  {}\n'.format(excel_export_folder)
                 os.mkdir(excel_export_folder)
 
+            # Make sure the match_Report_to_APN_folder exists, create it if it does not
+            if not os.path.exists(match_Report_to_APN_folder):
+                print 'NOTICE, match_Report_to_APN_folder doesn\'t exist, creating it now at:\n  {}\n'.format(match_Report_to_APN_folder)
+                os.mkdir(match_Report_to_APN_folder)
+
+            # Make sure the FILE match_Report_to_APN_txt exists, create it if it does not
+            if not os.path.exists(match_Report_to_APN_txt):
+                print '*** WARNING, match_Report_to_APN_txt doesn\'t exist, creating it now at:\n  {}\n'.format(match_Report_to_APN_txt)
+                print '*** The intent of this missing file is to handle stacked parcels by linking a Damage Assessment Report'
+                print '***   with one of the APNs that the DA Report point is on.'
+                print '***   because this file is missing and was created by the script, all of the DA Reports that were on a stacked parcel will'
+                print '***   not have any APN information.  The QA/QC file will also let you know which reports were on stacked parcels'
+                print '*** In order to have a DA Report keep its APN information, PDS DA or LUEG-GIS staff should add each Report Number in the QA/QC file
+                print '***   and the associated APN to the newly created text file then rerun this script (or series of scripts)'
+
+                f = open(match_Report_to_APN_txt, 'w+')
+                f.write("This CSV file is used to match a Damage Assessment Report Number with an APN (or multiple APNs) if that Report is on a 'Stacked Parcel'\n")
+                f.write("Stacked Parcels happen when there are more than 1 APN Number associated with the footprint of a Parcel\n")
+                f.write("To use this file, simply add the Report Number on the left and add the associated 10-digit APN (without dashes) to the right.\n")
+                f.write("Please make sure that the Report Number you enter overlaps the parcel with the APN number you enter.\n")
+                f.write("If you need one report to be associated with multiple APN's (i.e. one report for multiple condos), add the same report number multiple times next to the different APN's\n")
+                f.write("DO NOT USE EXCEL TO EDIT THIS SHEET, AS IT WILL TRUNCATE THE DECIMAL POINT IN THE 'Report Number' column.  Edit in Notepad or Notepad++ instead.\n")
+                f.write("Row 11 starts the Report Number/APN pair entries.  The format for entering the Report Number and APN pair is as follows:\n")
+                f.write("20180328.1234567,1234567890\n")
+                f.write("\n")
+                f.write("Report Number   ,10-Digit APN (no dashes) | BEGIN ENTERING REPORT NUMBER / APN PAIR BELOW\n")
+                f.close()
+
         except Exception as e:
             success = False
             print '\n*** ERROR with Check Folder Schema ***'
             print str(e)
-
 
     #---------------------------------------------------------------------------
     # Make sure that the data was downloaded successfully before trying to process it.
